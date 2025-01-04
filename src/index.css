@@ -1,0 +1,41 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Variables globales de colores */
+:root {
+  /* Colores Primarios */
+  --primary-blue: #4A90E2;    /* Azul principal más suave */
+  --primary-yellow: #FFE66D;  /* Amarillo más gentil */
+  --primary-pink: #FF9ECD;    /* Rosa más cálido */
+  
+  /* Colores Complementarios */
+  --success-green: #7ED957;   /* Verde para éxitos */
+  --interactive-orange: #FFB067; /* Naranja para interacciones */
+  --secondary-purple: #A6B1E1;   /* Púrpura para elementos secundarios */
+
+  /* Colores de Fondo y Texto */
+  --background-light: #FFFFFF;
+  --text-dark: #2D3748;
+  --text-light: #FFFFFF;
+}
+
+/* Estilos base */
+body {
+  margin: 0;
+  padding: 0;
+  font-family: 'Nunito', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Clases de utilidad personalizadas */
+.btn-primary {
+  @apply bg-[var(--primary-blue)] text-white px-6 py-3 rounded-lg transition-all hover:opacity-90;
+}
+
+.btn-secondary {
+  @apply bg-[var(--interactive-orange)] text-white px-6 py-3 rounded-lg transition-all hover:opacity-90;
+}
