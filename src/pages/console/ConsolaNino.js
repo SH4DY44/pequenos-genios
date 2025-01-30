@@ -6,6 +6,7 @@ import { FaGamepad, FaBook, FaChartBar, FaBell } from "react-icons/fa";
 import { toast } from "react-toastify";
 import Actividades from "./Actividades";
 import Memorama from "./juegos/memorama/Memorama";
+import Eco from "./juegos/eco/SecuenciasPalabras";
 
 function ConsolaNino() {
   const [perfilNino, setPerfilNino] = useState(null);
@@ -25,7 +26,7 @@ function ConsolaNino() {
     try {
       const perfilDoc = await getDoc(doc(db, "childProfiles", profileId));
       if (perfilDoc.exists()) {
-        setPerfilNino({...perfilDoc.data(), id: profileId});
+        setPerfilNino({ ...perfilDoc.data(), id: profileId });
       } else {
         navigate("/profile-selection");
       }
@@ -79,6 +80,20 @@ function ConsolaNino() {
       color: "bg-red-500",
     },
   ];
+
+  const actualizarPuntos = async (puntos) => {
+    try {
+      await updateDoc(doc(db, "childProfiles", profileId), {
+        puntosTotales: increment(puntos),
+      });
+      // Actualizar el estado local
+      await fetchPerfilNino();
+      toast.success(`¡Ganaste ${puntos} puntos!`);
+    } catch (error) {
+      console.error("Error actualizando puntos:", error);
+      toast.error("Error al actualizar los puntos");
+    }
+  };
 
   return (
     <div className="min-h-screen bg-[var(--primary-yellow)]">
@@ -222,6 +237,26 @@ function ConsolaNino() {
                   </div>
                 </div>
 
+                {/* Carta del Juego de Sílabas */}
+                <div className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-all">
+                  <div className="h-40 bg-gray-50 flex items-center justify-center text-6xl">
+                    🎯
+                  </div>
+                  <div className="p-4">
+                    <h3 className="text-lg font-bold mb-2">Secuencias de Palabras</h3>
+                    <p className="text-gray-600 text-sm mb-4">
+                      Repite las palabras en el mismo orden.
+                      Aprende mientras juegas.
+                    </p>
+                    <button
+                      onClick={() => setJuegoSeleccionado("eco")}
+                      className="w-full px-4 py-2 bg-[var(--primary-blue)] text-white rounded-lg hover:opacity-90"
+                    >
+                      Jugar
+                    </button>
+                  </div>
+                </div>
+
                 {/* Aquí se añadirán más juegos */}
               </div>
 
@@ -229,6 +264,7 @@ function ConsolaNino() {
               {juegoSeleccionado && (
                 <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
                   <div className="bg-white rounded-lg w-full max-w-6xl max-h-[90vh] overflow-y-auto p-6">
+                    <div className="flex justify-between items-center mb-4"></div>
 
                     {juegoSeleccionado === "memorama" && (
                       <Memorama
@@ -236,19 +272,18 @@ function ConsolaNino() {
                           ...perfilNino,
                           id: profileId,
                         }}
-                        onScoreUpdate={async (puntos) => {
-                          try {
-                            await updateDoc(doc(db, "childProfiles", profileId), {
-                              puntosTotales: increment(puntos)
-                            });
-                            // Actualizar el estado local
-                            await fetchPerfilNino();
-                            toast.success(`¡Ganaste ${puntos} puntos!`);
-                          } catch (error) {
-                            console.error("Error actualizando puntos:", error);
-                            toast.error("Error al actualizar los puntos");
-                          }
+                        onScoreUpdate={actualizarPuntos}
+                        onClose={() => setJuegoSeleccionado(null)}
+                      />
+                    )}
+
+                    {juegoSeleccionado === "eco" && (
+                      <Eco
+                        perfilNino={{
+                          ...perfilNino,
+                          id: profileId,
                         }}
+                        onScoreUpdate={actualizarPuntos}
                         onClose={() => setJuegoSeleccionado(null)}
                       />
                     )}

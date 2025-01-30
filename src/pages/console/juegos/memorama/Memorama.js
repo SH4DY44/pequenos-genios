@@ -27,7 +27,7 @@ function Memorama({ perfilNino, onScoreUpdate, onClose }) {
     },
     "basico-alto": {
       numPares: 6,
-      tiempoLimite: null,
+      tiempoLimite: 300,
       puntosPorAcierto: 15,
       descripcion: "Nivel Básico Alto - ¡Vamos mejorando!",
     },
