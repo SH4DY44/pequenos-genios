@@ -1,19 +1,15 @@
-import React, { useState, useReducer, useCallback, useMemo, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useReducer } from 'react';
 import { doc, updateDoc, increment } from 'firebase/firestore';
 import { db } from '../../../../config/firebase';
 import { toast } from 'react-toastify';
 import TutorialModal from './TutorialModal';
-import { 
-  NIVELES_CONFIG, 
-  CATEGORIAS, 
-  SONIDOS, 
-  ANIMACIONES,
-  RECOMPENSAS 
-} from './palabras';
+import GameOverModal from './GameOverModal';
+import { NIVELES_CONFIG, CATEGORIAS, SONIDOS, ANIMACIONES } from './palabras';
 
 // Acciones del juego
 const GAME_ACTIONS = {
-  START_GAME: 'START_GAME',
+  INIT_GAME: 'INIT_GAME',
+  START_SEQUENCE: 'START_SEQUENCE',
   SHOW_SEQUENCE: 'SHOW_SEQUENCE',
   HIDE_SEQUENCE: 'HIDE_SEQUENCE',
   SELECT_WORD: 'SELECT_WORD',
@@ -24,8 +20,8 @@ const GAME_ACTIONS = {
   RESET_GAME: 'RESET_GAME'
 };
 
-// Estado inicial del juego
-const initialGameState = {
+// Estado inicial
+const initialState = {
   secuenciaActual: [],
   secuenciaUsuario: [],
   mostrando: false,
@@ -35,59 +31,72 @@ const initialGameState = {
   nivelActual: 0,
   intentosRestantes: 3,
   tiempoRestante: null,
-  juegoIniciado: false,
+  juegoActivo: false,
   juegoTerminado: false,
-  cargando: false,
-  jugadaActual: {
-    indice: 0,
-    correcta: true
-  }
+  secuenciaCompletada: 0,
+  mostrandoSecuencia: false,
+  seleccionandoSecuencia: false
 };
 
-// Reducer para manejar el estado del juego
 function gameReducer(state, action) {
   switch (action.type) {
-    case GAME_ACTIONS.START_GAME:
+    case GAME_ACTIONS.INIT_GAME:
       return {
-        ...initialGameState,
-        juegoIniciado: true,
-        intentosRestantes: action.payload.maxAttempts || 3
+        ...initialState,
+        juegoActivo: true,
+        intentosRestantes: action.payload.intentosMaximos || 3
       };
-    
+
+    case GAME_ACTIONS.START_SEQUENCE:
+      return {
+        ...state,
+        secuenciaActual: action.payload.secuencia,
+        secuenciaUsuario: [],
+        mostrandoSecuencia: true,
+        seleccionandoSecuencia: false,
+        tiempoRestante: null
+      };
+
     case GAME_ACTIONS.SHOW_SEQUENCE:
       return {
         ...state,
-        secuenciaActual: action.payload.sequence,
         mostrando: true,
-        secuenciaUsuario: []
+        mostrandoSecuencia: true,
+        seleccionandoSecuencia: false,
+        tiempoRestante: action.payload.tiempo || null
       };
 
     case GAME_ACTIONS.HIDE_SEQUENCE:
       return {
         ...state,
         mostrando: false,
-        tiempoRestante: null
+        mostrandoSecuencia: false,
+        seleccionandoSecuencia: true,
+        tiempoRestante: action.payload.tiempo || null
       };
 
     case GAME_ACTIONS.SELECT_WORD:
       return {
         ...state,
-        secuenciaUsuario: [...state.secuenciaUsuario, action.payload.word]
+        secuenciaUsuario: [...state.secuenciaUsuario, action.payload.palabra]
       };
 
     case GAME_ACTIONS.UPDATE_TIMER:
       return {
         ...state,
-        tiempoRestante: action.payload.time
+        tiempoRestante: action.payload.tiempo
       };
 
     case GAME_ACTIONS.COMPLETE_SEQUENCE:
       return {
         ...state,
-        puntuacion: state.puntuacion + action.payload.points,
+        puntuacion: state.puntuacion + action.payload.puntos,
         comboActual: state.comboActual + 1,
         maxCombo: Math.max(state.maxCombo, state.comboActual + 1),
-        nivelActual: state.nivelActual + 1
+        secuenciaCompletada: state.secuenciaCompletada + 1,
+        mostrandoSecuencia: false,
+        seleccionandoSecuencia: false,
+        tiempoRestante: null
       };
 
     case GAME_ACTIONS.HANDLE_ERROR:
@@ -95,18 +104,23 @@ function gameReducer(state, action) {
         ...state,
         comboActual: 1,
         intentosRestantes: state.intentosRestantes - 1,
-        secuenciaUsuario: []
+        mostrandoSecuencia: false,
+        seleccionandoSecuencia: false,
+        tiempoRestante: null
       };
 
     case GAME_ACTIONS.END_GAME:
       return {
         ...state,
+        juegoActivo: false,
         juegoTerminado: true,
-        juegoIniciado: false
+        mostrandoSecuencia: false,
+        seleccionandoSecuencia: false,
+        tiempoRestante: null
       };
 
     case GAME_ACTIONS.RESET_GAME:
-      return initialGameState;
+      return initialState;
 
     default:
       return state;
@@ -114,9 +128,8 @@ function gameReducer(state, action) {
 }
 
 function SecuenciasPalabras({ perfilNino, onScoreUpdate, onClose }) {
-  const [state, dispatch] = useReducer(gameReducer, initialGameState);
+  const [state, dispatch] = useReducer(gameReducer, initialState);
   const [showTutorial, setShowTutorial] = useState(true);
-  const [debeIniciarTimer, setDebeIniciarTimer] = useState(false);
 
   // Obtener configuración del nivel
   const configNivel = useMemo(() => {
@@ -131,41 +144,29 @@ function SecuenciasPalabras({ perfilNino, onScoreUpdate, onClose }) {
     return NIVELES_CONFIG[nivelMapeado] || NIVELES_CONFIG.basico;
   }, [perfilNino]);
 
-  // Iniciar juego
-  const iniciarJuego = useCallback(() => {
-    dispatch({ 
-      type: GAME_ACTIONS.START_GAME, 
-      payload: { maxAttempts: configNivel.intentosMaximos || 3 }
-    });
-    generarNuevaSecuencia();
-  }, [configNivel]);
+  // Reproducir sonidos
+  const playSound = useCallback((soundName) => {
+    const audio = new Audio(SONIDOS[soundName]);
+    audio.volume = 0.3;
+    audio.play().catch(() => {});
+  }, []);
 
-  // Generar nueva secuencia
-  const generarNuevaSecuencia = useCallback(() => {
-    setDebeIniciarTimer(false);
-    dispatch({ type: GAME_ACTIONS.HIDE_SEQUENCE });
-
-    if (!configNivel?.categorias) {
-      console.error('Configuración de nivel no válida');
-      return;
-    }
-
-    const poolPalabras = configNivel.categorias.flatMap(categoria => 
+  // Función para generar nueva secuencia
+  const generarSecuencia = useCallback(() => {
+    const categoriasDisponibles = configNivel.categorias;
+    const poolPalabras = categoriasDisponibles.flatMap(categoria => 
       CATEGORIAS[categoria] ? CATEGORIAS[categoria] : []
     );
 
-    if (poolPalabras.length === 0) {
-      console.error('No hay palabras disponibles');
-      return;
+    const secuencia = [];
+    for (let i = 0; i < configNivel.numElementos; i++) {
+      const randomIndex = Math.floor(Math.random() * poolPalabras.length);
+      secuencia.push(poolPalabras[randomIndex]);
     }
 
-    const secuencia = [...poolPalabras]
-      .sort(() => Math.random() - 0.5)
-      .slice(0, configNivel.numPalabras);
-
     dispatch({
-      type: GAME_ACTIONS.SHOW_SEQUENCE,
-      payload: { sequence: secuencia }
+      type: GAME_ACTIONS.START_SEQUENCE,
+      payload: { secuencia }
     });
 
     mostrarSecuencia(secuencia);
@@ -173,105 +174,83 @@ function SecuenciasPalabras({ perfilNino, onScoreUpdate, onClose }) {
 
   // Mostrar secuencia
   const mostrarSecuencia = async (secuencia) => {
-    if (!secuencia || secuencia.length === 0) return;
+    if (!secuencia || !secuencia.length) return;
     
-    for (let i = 0; i < secuencia.length; i++) {
-      await new Promise(resolve => setTimeout(resolve, configNivel.tiempoMostrarPalabra));
-    }
-    
-    iniciarTimer();
-  };
-
-  // Timer del juego
-  useEffect(() => {
-    if (!state.mostrando || !debeIniciarTimer) return;
-
-    let tiempo = configNivel.tiempoMemorizar;
     dispatch({ 
-      type: GAME_ACTIONS.UPDATE_TIMER, 
-      payload: { time: tiempo } 
-    });
-
-    const timer = setInterval(() => {
-      tiempo -= 1;
-      if (tiempo <= 0) {
-        clearInterval(timer);
-        dispatch({ type: GAME_ACTIONS.HIDE_SEQUENCE });
-        finalizarJuego(false);
-      } else {
-        dispatch({ 
-          type: GAME_ACTIONS.UPDATE_TIMER, 
-          payload: { time: tiempo } 
-        });
+      type: GAME_ACTIONS.SHOW_SEQUENCE,
+      payload: { 
+        tiempo: configNivel.tiempoVisualizacion * secuencia.length / 1000 
       }
-    }, 1000);
-
-    return () => clearInterval(timer);
-  }, [state.mostrando, debeIniciarTimer, configNivel.tiempoMemorizar]);
-
-  // Iniciar timer
-  const iniciarTimer = useCallback(() => {
-    if (!configNivel.tiempoMemorizar) {
-      dispatch({ type: GAME_ACTIONS.HIDE_SEQUENCE });
-      return;
+    });
+  
+    // Mostrar cada elemento con delay
+    for (let i = 0; i < secuencia.length; i++) {
+      await new Promise(resolve => setTimeout(resolve, configNivel.tiempoVisualizacion));
     }
-    setDebeIniciarTimer(true);
-  }, [configNivel.tiempoMemorizar]);
+  
+    dispatch({ 
+      type: GAME_ACTIONS.HIDE_SEQUENCE,
+      payload: { 
+        tiempo: configNivel.tiempoMemorizar
+      }
+    });
+  };
 
   // Manejar selección de palabra
   const handleWordSelection = useCallback(async (palabra) => {
-    if (state.mostrando || state.juegoTerminado) return;
+    if (state.mostrandoSecuencia || state.juegoTerminado) return;
 
-    const nuevaSecuenciaUsuario = [...state.secuenciaUsuario, palabra];
-    
     dispatch({
       type: GAME_ACTIONS.SELECT_WORD,
-      payload: { word: palabra }
+      payload: { palabra }
     });
 
     const indiceActual = state.secuenciaUsuario.length;
     if (palabra.id !== state.secuenciaActual[indiceActual].id) {
+      playSound('error');
       await handleError();
       return;
     }
 
+    playSound('acierto');
+
     if (state.secuenciaUsuario.length + 1 === state.secuenciaActual.length) {
       await handleSequenceComplete();
     }
-  }, [state]);
+  }, [state, playSound]);
 
   // Manejar secuencia completada
   const handleSequenceComplete = async () => {
-    try {
-      const basePoints = configNivel.puntosPorAcierto;
-      const multiplier = Math.min(configNivel.maxCombo, state.comboActual);
-      const pointsEarned = Math.floor(basePoints * multiplier);
-
-      dispatch({
-        type: GAME_ACTIONS.COMPLETE_SEQUENCE,
-        payload: { points: pointsEarned }
-      });
-
-      if (onScoreUpdate) {
-        await onScoreUpdate(pointsEarned);
+    const puntosPorAcierto = configNivel.puntosBase;
+    const multiplicador = Math.min(configNivel.maxCombo, state.comboActual);
+    const puntosGanados = Math.floor(puntosPorAcierto * multiplicador);
+  
+    // Primero actualizamos el contador de secuencias
+    const nuevaSecuenciaCompletada = state.secuenciaCompletada + 1;
+  
+    dispatch({
+      type: GAME_ACTIONS.COMPLETE_SEQUENCE,
+      payload: { 
+        puntos: puntosGanados,
+        secuenciaCompletada: nuevaSecuenciaCompletada
       }
-
-      if (state.comboActual > 1) {
-        toast.success(`¡${state.comboActual}x Combo! +${pointsEarned} puntos`, {
-          position: "top-right",
-          autoClose: 1500
-        });
-      }
-
-      // Siguiente nivel o fin del juego
-      if (state.nivelActual + 1 >= configNivel.numNiveles) {
-        await finalizarJuego(true);
-      } else {
-        generarNuevaSecuencia();
-      }
-    } catch (error) {
-      console.error('Error en secuencia completa:', error);
-      toast.error('Error al procesar la secuencia');
+    });
+  
+    if (onScoreUpdate) {
+      await onScoreUpdate(puntosGanados);
+    }
+  
+    if (state.comboActual > 1) {
+      playSound('combo');
+      toast.success(`¡${state.comboActual}x Combo! +${puntosGanados} puntos`);
+    }
+  
+    // Comparamos con el número exacto de secuencias
+    if (nuevaSecuenciaCompletada === configNivel.numSecuencias) {
+      playSound('nivelCompletado');
+      await finalizarJuego(true);
+    } else {
+      setTimeout(() => generarSecuencia(), 1000);
     }
   };
 
@@ -280,37 +259,23 @@ function SecuenciasPalabras({ perfilNino, onScoreUpdate, onClose }) {
     dispatch({ type: GAME_ACTIONS.HANDLE_ERROR });
 
     if (state.intentosRestantes <= 1) {
-      dispatch({ type: GAME_ACTIONS.HANDLE_ERROR });
-
-      toast.error('¡Se acabaron los intentos!', {
-        position: "top-center",
-        autoClose: 2000,
-        icon: "💔"
-      });
-      
-      try {
-        await updateDoc(doc(db, 'childProfiles', perfilNino.id), {
-          [`estadisticasJuegos.secuenciasPalabras.intentosFallidos`]: increment(1)
-        });
-      } catch (error) {
-        console.error('Error guardando estadísticas:', error);
-      }
-      
+      toast.error('¡Se acabaron los intentos!');
       await finalizarJuego(false);
       return;
     }
 
-    toast.error(`¡Secuencia incorrecta! Te quedan ${state.intentosRestantes - 1} ${
-      state.intentosRestantes - 1 === 1 ? 'intento' : 'intentos'
-    }`, {
-      position: "top-center",
-      autoClose: 2000,
-      icon: "⚠️"
-    });
-    
-    await new Promise(resolve => setTimeout(resolve, 1500));
-    generarNuevaSecuencia();
+    toast.warning(`¡Secuencia incorrecta! Te quedan ${state.intentosRestantes - 1} intentos`);
+    setTimeout(() => generarSecuencia(), 1500);
   };
+
+  // Iniciar juego
+  const iniciarJuego = useCallback(() => {
+    dispatch({
+      type: GAME_ACTIONS.INIT_GAME,
+      payload: { intentosMaximos: configNivel.intentosMaximos }
+    });
+    generarSecuencia();
+  }, [configNivel, generarSecuencia]);
 
   // Finalizar juego
   const finalizarJuego = async (victoria) => {
@@ -318,28 +283,56 @@ function SecuenciasPalabras({ perfilNino, onScoreUpdate, onClose }) {
     
     try {
       await updateDoc(doc(db, 'childProfiles', perfilNino.id), {
-        [`estadisticasJuegos.secuenciasPalabras.${victoria ? 'victoriasConsecutivas' : 'derrotasConsecutivas'}`]: increment(1),
-        [`estadisticasJuegos.secuenciasPalabras.maxPuntuacion`]: victoria ? state.puntuacion : increment(0)
+        [`estadisticasJuegos.secuenciasPalabras.${victoria ? 'victorias' : 'derrotas'}`]: increment(1),
+        'estadisticasJuegos.secuenciasPalabras.maxPuntuacion': victoria ? 
+          Math.max((perfilNino.estadisticasJuegos?.secuenciasPalabras?.maxPuntuacion || 0), state.puntuacion) :
+          increment(0)
       });
 
+      playSound(victoria ? 'juegoCompletado' : 'error');
+      
       if (victoria) {
-        toast.success(`¡Felicitaciones! Completaste el juego con ${state.puntuacion} puntos y un combo máximo de ${state.maxCombo}x`);
+        toast.success('¡Felicitaciones! Has completado el nivel');
       } else {
-        toast.info('¡Juego terminado! Inténtalo de nuevo');
+        toast.error('¡Juego terminado! Inténtalo de nuevo');
       }
     } catch (error) {
-      console.error('Error guardando estadísticas finales:', error);
+      console.error('Error guardando estadísticas:', error);
       toast.error('Error al guardar las estadísticas');
     }
   };
 
-  // Iniciar desde el tutorial
-  const iniciarJuegoDesdeModal = useCallback(() => {
-    setShowTutorial(false);
-    setDebeIniciarTimer(false);
-    iniciarJuego();
-  }, [iniciarJuego]);
+  useEffect(() => {
 
+    if (!state.tiempoRestante) return;
+    
+    const timer = setInterval(() => {
+      if (state.tiempoRestante <= 1) {
+        clearInterval(timer);
+        // Si estamos mostrando secuencia, pasamos a selección
+        if (state.mostrandoSecuencia) {
+          dispatch({ 
+            type: GAME_ACTIONS.HIDE_SEQUENCE,
+            payload: { 
+              tiempo: configNivel.tiempoMemorizar
+            }
+          });
+        } else if (state.seleccionandoSecuencia) {
+          handleError();
+        }
+      } else {
+        dispatch({
+          type: GAME_ACTIONS.UPDATE_TIMER,
+          payload: { tiempo: state.tiempoRestante - 1 }
+        });
+      }
+    }, 1000);
+  
+    return () => clearInterval(timer);
+  }, [state.tiempoRestante]);
+
+
+  // 11. Renderizado
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-purple-50 p-6">
       <div className="max-w-7xl mx-auto bg-white rounded-xl shadow-lg">
@@ -373,151 +366,130 @@ function SecuenciasPalabras({ perfilNino, onScoreUpdate, onClose }) {
             </div>
           </div>
         </div>
-
+  
         {/* Panel de Estadísticas */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 p-6">
           <div className="bg-gradient-to-r from-blue-100 to-blue-200 rounded-lg p-4">
             <div className="text-sm text-blue-700 font-medium">Puntuación</div>
             <div className="text-2xl font-bold text-blue-800">{state.puntuacion} pts</div>
           </div>
-
+  
           <div className="bg-gradient-to-r from-purple-100 to-purple-200 rounded-lg p-4">
-            <div className="text-sm text-purple-700 font-medium">Nivel</div>
-            <div className="text-2xl font-bold text-purple-800">{state.nivelActual + 1}</div>
+            <div className="text-sm text-purple-700 font-medium">
+              Secuencia {state.secuenciaCompletada+1} / {configNivel.numSecuencias+1}
+            </div>
+            <div className="w-full bg-purple-200 rounded-full h-2.5 mt-2">
+              <div 
+                className="bg-purple-600 h-2.5 rounded-full transition-all"
+                style={{ width: `${(state.secuenciaCompletada / configNivel.numSecuencias) * 100}%` }}
+              ></div>
+            </div>
           </div>
-
+  
           {state.comboActual > 1 && (
             <div className="bg-gradient-to-r from-green-100 to-green-200 rounded-lg p-4 animate-pulse">
               <div className="text-sm text-green-700 font-medium">Combo</div>
               <div className="text-2xl font-bold text-green-800">x{state.comboActual}</div>
             </div>
           )}
-
+  
           <div className="bg-gradient-to-r from-red-100 to-red-200 rounded-lg p-4">
-            <div className="text-sm text-red-700 font-medium">Intentos</div>
+            <div className="text-sm text-red-700 font-medium">Vidas</div>
             <div className="flex items-center space-x-2">
-              {[...Array(state.intentosRestantes)].map((_, i) => (
-                <span key={i} className="text-2xl">❤️</span>
+              {Array(state.intentosRestantes).fill('❤️').map((heart, index) => (
+                <span key={index} className="text-2xl">{heart}</span>
               ))}
             </div>
           </div>
         </div>
-
-        {/* Temporizador */}
+  
+        {/* Timer */}
         {state.tiempoRestante !== null && (
-          <div className="px-6">
+          <div className="px-6 mb-4">
             <div className="bg-gradient-to-r from-yellow-100 to-orange-100 rounded-lg p-4">
               <div className="text-sm text-yellow-700 font-medium">Tiempo Restante</div>
               <div className="text-2xl font-bold text-yellow-800">{state.tiempoRestante}s</div>
             </div>
           </div>
         )}
-
+  
         {/* Área de Juego */}
-        {!state.juegoIniciado ? (
-          <div className="p-12 text-center">
-            <h3 className="text-2xl font-bold text-gray-700 mb-4">
-              ¡Prepárate para empezar!
-            </h3>
-            <p className="text-gray-600 mb-6">
-              Lee las instrucciones y cuando estés listo, presiona el botón "Cómo jugar"
-            </p>
-          </div>
-        ) : (
-          <div className="p-6">
-            <div className="bg-gray-50 rounded-lg p-6 shadow-inner">
-              {state.mostrando ? (
-                <div className="flex flex-wrap justify-center gap-6">
-                  {state.secuenciaActual.map((palabra, index) => (
-                    <div
-                      key={index}
-                      className="w-28 h-28 flex flex-col items-center justify-center 
-                               bg-white rounded-xl shadow-md transform transition-all duration-300
-                               animate-bounce"
-                      style={{ animationDelay: `${index * 200}ms` }}
-                    >
-                      <div className="text-4xl mb-2">{palabra.imagen}</div>
-                      <div className="text-sm font-medium">{palabra.palabra}</div>
+        <div className="p-6">
+          <div className="bg-gray-50 rounded-lg p-6 shadow-inner">
+            {state.mostrando ? (
+              <div className="flex flex-wrap justify-center gap-6">
+                {state.secuenciaActual.map((palabra, index) => (
+                  <div
+                    key={index}
+                    className="w-28 h-28 flex flex-col items-center justify-center 
+                             bg-white rounded-xl shadow-md transform transition-all duration-300
+                             animate-bounce"
+                    style={{ animationDelay: `${index * 200}ms` }}
+                  >
+                    <div className="text-4xl mb-2">{palabra.imagen}</div>
+                    <div className="text-sm font-medium">{palabra.palabra}</div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="space-y-8">
+                {configNivel.categorias.map(categoria => (
+                  <div key={categoria}>
+                    <h3 className="text-lg font-semibold mb-4 text-gray-700 capitalize">
+                      {categoria}
+                    </h3>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
+                      {CATEGORIAS[categoria].map(palabra => (
+                        <button
+                          key={palabra.id}
+                          onClick={() => handleWordSelection(palabra)}
+                          disabled={state.mostrando || state.juegoTerminado}
+                          className={`
+                            aspect-square flex flex-col items-center justify-center 
+                            bg-white rounded-xl border-2 p-4
+                            ${state.secuenciaUsuario.includes(palabra) ? 'border-green-400' : 'border-gray-200'}
+                            ${!state.mostrando && !state.juegoTerminado ? 'hover:border-blue-400 hover:shadow-lg' : ''}
+                            transition-all duration-300
+                            disabled:opacity-50 disabled:cursor-not-allowed
+                          `}
+                        >
+                          <div className="text-4xl mb-2">{palabra.imagen}</div>
+                          <div className="text-sm font-medium">{palabra.palabra}</div>
+                        </button>
+                      ))}
                     </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
-                  {configNivel.categorias.flatMap(categoria =>
-                    CATEGORIAS[categoria].map(palabra => (
-                      <button
-                        key={palabra.id}
-                        onClick={() => handleWordSelection(palabra)}
-                        disabled={state.mostrando || state.juegoTerminado}
-                        className={`
-                          aspect-square flex flex-col items-center justify-center 
-                          bg-white rounded-xl border-2 p-4
-                          ${state.secuenciaUsuario.includes(palabra) ? 'border-green-400' : 'border-gray-200'}
-                          ${!state.mostrando && !state.juegoTerminado ? 'hover:border-blue-400 hover:shadow-lg' : ''}
-                          transition-all duration-300
-                        `}
-                      >
-                        <div className="text-4xl mb-2">{palabra.imagen}</div>
-                        <div className="text-sm font-medium">{palabra.palabra}</div>
-                      </button>
-                    ))
-                  )}
-                </div>
-              )}
-            </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
-        )}
-
-        {/* Tutorial Modal */}
+        </div>
+  
+        {/* Modales */}
         <TutorialModal 
           isOpen={showTutorial} 
-          onClose={iniciarJuegoDesdeModal}
+          onClose={() => {
+            setShowTutorial(false);
+            if (!state.juegoActivo) {
+              iniciarJuego();
+            }
+          }}
           configNivel={configNivel}
         />
-
-        {/* Modal de Fin de Juego */}
-        {state.juegoTerminado && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-white p-8 rounded-xl text-center max-w-md animate-fade-in">
-              <div className="text-6xl mb-4">
-                {state.intentosRestantes > 0 ? '🎉' : '💔'}
-              </div>
-              <h3 className="text-2xl font-bold text-[var(--primary-blue)] mb-4">
-                {state.intentosRestantes > 0 ? '¡Juego Completado!' : '¡Juego Terminado!'}
-              </h3>
-              <div className="bg-blue-50 p-4 rounded-lg mb-6">
-                <p className="text-lg mb-2">
-                  Puntuación final: <span className="font-bold text-blue-600">{state.puntuacion}</span>
-                </p>
-                <p className="text-sm text-gray-600 mb-2">
-                  Combo máximo: {state.maxCombo}x
-                </p>
-                <p className="text-sm text-gray-600">
-                  Intentos restantes: {state.intentosRestantes}
-                </p>
-              </div>
-              <div className="space-y-4">
-                <button
-                  onClick={iniciarJuego}
-                  className="w-full px-6 py-3 bg-[var(--primary-blue)] text-white rounded-lg 
-                            hover:opacity-90 transition-all font-medium"
-                >
-                  Jugar de nuevo
-                </button>
-                <button
-                  onClick={onClose}
-                  className="w-full px-6 py-3 border-2 border-gray-300 rounded-lg 
-                            hover:bg-gray-100 transition-all"
-                >
-                  Salir del juego
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
+  
+        <GameOverModal 
+          isOpen={state.juegoTerminado}
+          victoria={state.secuenciaCompletada === configNivel.numSecuencias}
+          puntuacion={state.puntuacion}
+          maxCombo={state.maxCombo}
+          onRestart={() => {
+            iniciarJuego();
+          }}
+          onClose={onClose}
+        />
       </div>
     </div>
   );
-}
+};
 
 export default SecuenciasPalabras;

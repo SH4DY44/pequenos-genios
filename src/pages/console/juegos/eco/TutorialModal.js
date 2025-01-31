@@ -1,6 +1,7 @@
 import React from 'react';
+import PropTypes from 'prop-types';
 
-function TutorialModal({ isOpen, onClose }) {
+function TutorialModal({ isOpen, onClose, configNivel }) {
   if (!isOpen) return null;
 
   return (
@@ -146,5 +147,11 @@ function TutorialModal({ isOpen, onClose }) {
     </div>
   );
 }
+
+TutorialModal.propTypes = {
+  isOpen: PropTypes.bool.isRequired,
+  onClose: PropTypes.func.isRequired,
+  configNivel: PropTypes.object
+};
 
 export default TutorialModal;
