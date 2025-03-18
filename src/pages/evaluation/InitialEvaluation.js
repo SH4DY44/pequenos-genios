@@ -8,6 +8,7 @@ function InitialEvaluation() {
     const [seccionActual, setSeccionActual] = useState(0);
     const [respuestas, setRespuestas] = useState({});
     const [todasRespondidas, setTodasRespondidas] = useState(false);
+    const [showCancelModal, setShowCancelModal] = useState(false);
     const location = useLocation();
     const navigate = useNavigate();
     const profileId = location.state?.profileId;
@@ -440,6 +441,15 @@ function InitialEvaluation() {
       };
   };
 
+  // Funcionalidad para cancelar la evaluación
+  const cancelarEvaluacion = () => {
+    setShowCancelModal(true);
+  };
+
+  const confirmarCancelacion = () => {
+    navigate('/profile-selection');
+  };
+
   // Navegar entre secciones
   const siguiente = () => {
       if (seccionActual < secciones.length - 1) {
@@ -498,8 +508,6 @@ function InitialEvaluation() {
           toast.error('Error al guardar la evaluación');
       }
   };
-
-
   return (
     <div className="min-h-screen bg-[var(--primary-yellow)]">
         {/* Barra de progreso general */}
@@ -569,14 +577,24 @@ function InitialEvaluation() {
 
             {/* Botones de navegación */}
             <div className="flex justify-between mt-8">
-                <button
-                    onClick={anterior}
-                    disabled={seccionActual === 0}
-                    className="px-6 py-2 rounded-lg border-2 border-gray-300 
-                            disabled:opacity-50 hover:bg-gray-50"
-                >
-                    Anterior
-                </button>
+                <div className="flex gap-2">
+                    <button
+                        onClick={cancelarEvaluacion}
+                        className="px-6 py-2 rounded-lg border-2 border-red-300 text-red-600
+                                hover:bg-red-50 transition-all"
+                    >
+                        Cancelar evaluación
+                    </button>
+                    
+                    <button
+                        onClick={anterior}
+                        disabled={seccionActual === 0}
+                        className="px-6 py-2 rounded-lg border-2 border-gray-300 
+                                disabled:opacity-50 hover:bg-gray-50"
+                    >
+                        Anterior
+                    </button>
+                </div>
                 
                 <div className="flex items-center gap-2">
                     <span className="text-gray-600">
@@ -594,8 +612,37 @@ function InitialEvaluation() {
                 </button>
             </div>
         </div>
+
+        {/* Modal de confirmación de cancelación */}
+        {showCancelModal && (
+            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                <div className="bg-white rounded-lg p-6 max-w-sm mx-4 animate-fade-in">
+                    <h3 className="text-xl font-bold mb-4 text-[var(--primary-blue)]">
+                        ¿Cancelar evaluación?
+                    </h3>
+                    <p className="text-gray-600 mb-6">
+                        Si cancelas la evaluación, perderás todas las respuestas ingresadas hasta ahora.
+                        ¿Estás seguro de que deseas cancelar?
+                    </p>
+                    <div className="flex justify-end gap-2">
+                        <button
+                            onClick={() => setShowCancelModal(false)}
+                            className="px-4 py-2 border-2 border-gray-300 rounded-lg hover:bg-gray-100"
+                        >
+                            Continuar evaluación
+                        </button>
+                        <button
+                            onClick={confirmarCancelacion}
+                            className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
+                        >
+                            Cancelar evaluación
+                        </button>
+                    </div>
+                </div>
+            </div>
+        )}
     </div>
-);
-}
+  
+)};
 
 export default InitialEvaluation;
