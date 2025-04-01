@@ -7,6 +7,7 @@ import { toast } from "react-toastify";
 import Actividades from "./Actividades";
 import Memorama from "./juegos/memorama/Memorama";
 import Eco from "./juegos/eco/SecuenciasPalabras";
+import Halli from "./juegos/halliGalli/HalliGalli";
 
 function ConsolaNino() {
   const [perfilNino, setPerfilNino] = useState(null);
@@ -243,10 +244,12 @@ function ConsolaNino() {
                     🎯
                   </div>
                   <div className="p-4">
-                    <h3 className="text-lg font-bold mb-2">Secuencias de Palabras</h3>
+                    <h3 className="text-lg font-bold mb-2">
+                      Secuencias de Palabras
+                    </h3>
                     <p className="text-gray-600 text-sm mb-4">
-                      Repite las palabras en el mismo orden.
-                      Aprende mientras juegas.
+                      Repite las palabras en el mismo orden. Aprende mientras
+                      juegas.
                     </p>
                     <button
                       onClick={() => setJuegoSeleccionado("eco")}
@@ -258,6 +261,25 @@ function ConsolaNino() {
                 </div>
 
                 {/* Aquí se añadirán más juegos */}
+                {/* Carta de Halli Galli */}
+                <div className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-all">
+                  <div className="h-40 bg-gray-50 flex items-center justify-center text-6xl">
+                    🔔
+                  </div>
+                  <div className="p-4">
+                    <h3 className="text-lg font-bold mb-2">Halli Galli</h3>
+                    <p className="text-gray-600 text-sm mb-4">
+                      ¡Toca la campana cuando veas la combinación correcta de
+                      frutas!
+                    </p>
+                    <button
+                      onClick={() => setJuegoSeleccionado("halligalli")}
+                      className="w-full px-4 py-2 bg-[var(--primary-blue)] text-white rounded-lg hover:opacity-90"
+                    >
+                      Jugar
+                    </button>
+                  </div>
+                </div>
               </div>
 
               {/* Modal para el juego seleccionado */}
@@ -279,6 +301,16 @@ function ConsolaNino() {
 
                     {juegoSeleccionado === "eco" && (
                       <Eco
+                        perfilNino={{
+                          ...perfilNino,
+                          id: profileId,
+                        }}
+                        onScoreUpdate={actualizarPuntos}
+                        onClose={() => setJuegoSeleccionado(null)}
+                      />
+                    )}
+                    {juegoSeleccionado === "halligalli" && (
+                      <Halli
                         perfilNino={{
                           ...perfilNino,
                           id: profileId,
