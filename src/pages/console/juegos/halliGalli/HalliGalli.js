@@ -120,7 +120,7 @@ function HalliGalli({ perfilNino, onScoreUpdate, onClose }) {
   const configNivel = getNivelConfig();
   
   // Referencia a la función finalizarJuego para poder usarla en useEffect
-  const finalizarJuego = useCallback(async () => {
+  const finalizarJuego = useCallback(async (victoria = false) => {
     if (frutalInterval) {
       clearInterval(frutalInterval);
       setFrutalInterval(null);
@@ -134,10 +134,15 @@ function HalliGalli({ perfilNino, onScoreUpdate, onClose }) {
     dispatch({ type: GAME_ACTIONS.END_GAME });
     
     try {
+      const tiempoJugado = configNivel.duracionJuego - (state.tiempoRestante || 0);
+      
       // Actualizar estadísticas en la base de datos
       await updateDoc(doc(db, 'childProfiles', perfilNino.id), {
-        [`estadisticasJuegos.halliGalli.puntuacionMaxima`]: increment(state.puntuacion > 0 ? state.puntuacion : 0),
-        [`estadisticasJuegos.halliGalli.partidasJugadas`]: increment(1)
+        [`estadisticasJuegos.halliGalli.maxPuntuacion`]: Math.max((perfilNino?.estadisticasJuegos?.halliGalli?.maxPuntuacion || 0), state.puntuacion),
+        [`estadisticasJuegos.halliGalli.partidasJugadas`]: increment(1),
+        [`estadisticasJuegos.halliGalli.${victoria ? 'victorias' : 'derrotas'}`]: increment(1),
+        [`estadisticasJuegos.halliGalli.tiempoTotal`]: increment(tiempoJugado),
+        [`tiempoTotal`]: increment(tiempoJugado) // Actualizar tiempo total general
       });
       
       // Actualizar puntos globales
@@ -150,7 +155,7 @@ function HalliGalli({ perfilNino, onScoreUpdate, onClose }) {
       console.error('Error guardando estadísticas:', error);
       toast.error('Error al guardar las estadísticas');
     }
-  }, [frutalInterval, gameTimer, perfilNino, state.puntuacion, onScoreUpdate]);
+  }, [frutalInterval, gameTimer, perfilNino, state.puntuacion, state.tiempoRestante, onScoreUpdate, configNivel]);
   
   // Generar secuencia de frutas
   const iniciarSecuenciaFrutas = useCallback(() => {
@@ -205,7 +210,7 @@ function HalliGalli({ perfilNino, onScoreUpdate, onClose }) {
       if (tiempoActual <= 0) {
         clearInterval(timer);
         clearInterval(fruitInterval);
-        setTimeout(() => finalizarJuego(), 0);
+        setTimeout(() => finalizarJuego(state.puntuacion>0), 0);
       }
     }, 1000);
     
@@ -225,7 +230,7 @@ function HalliGalli({ perfilNino, onScoreUpdate, onClose }) {
   // Observador para el tiempo restante
   useEffect(() => {
     if (state.tiempoRestante !== null && state.tiempoRestante <= 0 && state.juegoIniciado) {
-      finalizarJuego();
+      finalizarJuego(state.puntuacion > 0);  // Añadir esta condición
     }
   }, [state.tiempoRestante, state.juegoIniciado, finalizarJuego]);
   

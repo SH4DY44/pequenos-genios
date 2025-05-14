@@ -278,24 +278,22 @@ function SecuenciasPalabras({ perfilNino, onScoreUpdate, onClose }) {
   }, [configNivel, generarSecuencia]);
 
   // Finalizar juego
-  const finalizarJuego = async (victoria) => {
-    dispatch({ type: GAME_ACTIONS.END_GAME });
-    
+  const finalizarJuego = async (victoria = false) => {
     try {
+      // Actualizar estadísticas en la base de datos
       await updateDoc(doc(db, 'childProfiles', perfilNino.id), {
+        [`estadisticasJuegos.secuenciasPalabras.partidasJugadas`]: increment(1),
         [`estadisticasJuegos.secuenciasPalabras.${victoria ? 'victorias' : 'derrotas'}`]: increment(1),
-        'estadisticasJuegos.secuenciasPalabras.maxPuntuacion': victoria ? 
-          Math.max((perfilNino.estadisticasJuegos?.secuenciasPalabras?.maxPuntuacion || 0), state.puntuacion) :
-          increment(0)
+        [`estadisticasJuegos.secuenciasPalabras.maxPuntuacion`]: Math.max((perfilNino?.estadisticasJuegos?.secuenciasPalabras?.maxPuntuacion || 0), state.puntuacion)
       });
-
-      playSound(victoria ? 'juegoCompletado' : 'error');
       
-      if (victoria) {
-        toast.success('¡Felicitaciones! Has completado el nivel');
-      } else {
-        toast.error('¡Juego terminado! Inténtalo de nuevo');
-      }
+      // Eliminamos esta línea para evitar la doble contabilización
+      // if (state.puntuacion > 0 && onScoreUpdate) {
+      //   await onScoreUpdate(state.puntuacion);
+      // }
+      
+      dispatch({ type: GAME_ACTIONS.END_GAME });
+      toast.success(`¡Juego terminado! Puntuación final: ${state.puntuacion}`);
     } catch (error) {
       console.error('Error guardando estadísticas:', error);
       toast.error('Error al guardar las estadísticas');

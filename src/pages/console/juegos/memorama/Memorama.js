@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from "react";
 import { toast } from "react-toastify";
 import TutorialModal from "./TutorialModal";
+import { doc, updateDoc, increment } from "firebase/firestore";
+import { db } from "../../../../config/firebase";
 
 function Memorama({ perfilNino, onScoreUpdate, onClose }) {
   // Estados básicos
@@ -153,6 +155,7 @@ function Memorama({ perfilNino, onScoreUpdate, onClose }) {
       toast.error("Error al guardar los puntos");
     }
 
+    // Solo actualizamos la puntuación local, ya que onScoreUpdate ya actualiza la BD
     setPuntuacion(prev => prev + puntosGanados);
     setPuntuacionBase(prev => prev + puntosPorAcierto);
 
@@ -207,13 +210,33 @@ function Memorama({ perfilNino, onScoreUpdate, onClose }) {
     }, 1000);
   };
 
-  const finalizarJuego = async (victoria) => {
+  const finalizarJuego = async (victoria = false) => {
     setJuegoTerminado(true);
     
-    if (victoria) {
-      toast.success(`¡Felicitaciones! Juego completado con un combo máximo de ${maxCombo}x`);
-    } else {
-      toast.info("¡Se acabó el tiempo! ¡Inténtalo de nuevo!");
+    try {
+      // Calcular tiempo total jugado
+      const tiempoJugado = tiempoTranscurrido;
+      
+      // Actualizar estadísticas en la base de datos
+      await updateDoc(doc(db, 'childProfiles', perfilNino.id), {
+        [`estadisticasJuegos.memorama.maxPuntuacion`]: Math.max(
+          (perfilNino?.estadisticasJuegos?.memorama?.maxPuntuacion || 0), 
+          puntuacion
+        ),
+        [`estadisticasJuegos.memorama.partidasJugadas`]: increment(1),
+        [`estadisticasJuegos.memorama.${victoria ? 'victorias' : 'derrotas'}`]: increment(1),
+        [`estadisticasJuegos.memorama.tiempoTotal`]: increment(tiempoJugado),
+        [`tiempoTotal`]: increment(tiempoJugado) // Actualizar tiempo total general
+      });
+      
+      // Eliminamos esta línea para evitar la doble contabilización
+      // if (victoria && onScoreUpdate) {
+      //   await onScoreUpdate(puntuacion);
+      // }
+      
+    } catch (error) {
+      console.error("Error al guardar estadísticas:", error);
+      toast.error("Error al guardar las estadísticas");
     }
   };
 

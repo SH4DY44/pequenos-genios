@@ -89,6 +89,7 @@ function Register() {
         default:
           setError('Error al iniciar sesión con Google');
       }
+      
     }
   };
 

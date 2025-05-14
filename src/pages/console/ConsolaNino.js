@@ -8,6 +8,7 @@ import Actividades from "./Actividades";
 import Memorama from "./juegos/memorama/Memorama";
 import Eco from "./juegos/eco/SecuenciasPalabras";
 import Halli from "./juegos/halliGalli/HalliGalli";
+import Estadisticas from './Estadisticas'
 
 function ConsolaNino() {
   const [perfilNino, setPerfilNino] = useState(null);
@@ -84,9 +85,17 @@ function ConsolaNino() {
 
   const actualizarPuntos = async (puntos) => {
     try {
+      // Obtener fecha actual para registro de actividad
+      const fechaActual = new Date();
+      const fechaFormateada = fechaActual.toISOString().split('T')[0]; // Formato YYYY-MM-DD
+      
       await updateDoc(doc(db, "childProfiles", profileId), {
         puntosTotales: increment(puntos),
+        ultimaActividad: fechaActual,
+        [`registroActividades.${fechaFormateada}`]: increment(1),
+        actividadesCompletadas: increment(1)
       });
+      
       // Actualizar el estado local
       await fetchPerfilNino();
       toast.success(`¡Ganaste ${puntos} puntos!`);
@@ -326,7 +335,7 @@ function ConsolaNino() {
           )}
 
           {seccionActiva === "estadisticas" && (
-            <div>{/* Contenido de estadísticas */}</div>
+            <Estadisticas profileId={profileId} />
           )}
 
           {seccionActiva === "notificaciones" && (

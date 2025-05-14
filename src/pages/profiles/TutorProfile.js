@@ -25,7 +25,7 @@ function TutorProfile() {
 
   const handleSubmit = async (values, { setSubmitting }) => {
     try {
-      const userId = auth.currentUser.uid;
+      const userId = auth.currentUser.uid; //id del usuario
       
       // Guardar datos del tutor en Firestore
       await setDoc(doc(db, 'tutors', userId), {

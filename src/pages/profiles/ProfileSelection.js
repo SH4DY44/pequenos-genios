@@ -91,7 +91,7 @@ function ProfileSelection() {
 
   const handleCreateProfile = async (profileData) => {
     try {
-      const userId = auth.currentUser.uid;
+      const userId = auth.currentUser.uid; //obtiene el id del usuario actual
 
       const existingProfiles = await getDocs(
         query(
