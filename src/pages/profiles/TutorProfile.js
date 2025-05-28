@@ -10,14 +10,18 @@ const TutorProfileSchema = Yup.object().shape({
   fullName: Yup.string()
     .min(3, 'El nombre es muy corto')
     .max(50, 'El nombre es muy largo')
-    .required('El nombre es requerido')
-    .matches(/^[a-zA-ZÀ-ÿ\s]{3,50}$/, 'El nombre solo puede contener letras'),
+    .required('El nombre es requerido'),
   phone: Yup.string()
     .matches(/^[0-9]{10}$/, 'El número debe tener 10 dígitos')
     .required('El teléfono es requerido'),
   relationship: Yup.string()
-    .required('La relación con el niño es requerida')
+    .required('La relación con el niño es requerida'),
+  // NUEVO: Preferencia de notificaciones
+  preferenciaNotificacion: Yup.string()
+    .oneOf(['email', 'whatsapp', 'sms', 'todos'])
+    .default('whatsapp')
 });
+
 
 function TutorProfile() {
   const navigate = useNavigate();

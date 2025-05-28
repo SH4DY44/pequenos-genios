@@ -6,6 +6,8 @@ import TutorialModal from './TutorialModal';
 import BotonTimbre from './BotonTimbre';
 import FrutasDisplay from './FrutasDisplay';
 import { NIVELES_CONFIG, FRUTAS } from './frutas';
+import { NotificationService } from '../../../../services/notificationService';
+import { auth } from '../../../../config/firebase';
 
 // Acciones del juego
 const GAME_ACTIONS = {
@@ -148,6 +150,19 @@ function HalliGalli({ perfilNino, onScoreUpdate, onClose }) {
       // Actualizar puntos globales
       if (state.puntuacion > 0 && onScoreUpdate) {
         await onScoreUpdate(state.puntuacion);
+      }
+      
+      // Notificación persistente
+      if (auth.currentUser) {
+        await NotificationService.crearNotificacion({
+          tutorId: auth.currentUser.uid,
+          profileId: perfilNino.id,
+          tipo: 'logro_alcanzado',
+          titulo: 'Halli Galli: Juego terminado',
+          mensaje: `Puntuación final: ${state.puntuacion}`,
+          datos: { puntos: state.puntuacion, victoria },
+          prioridad: victoria ? 'alta' : 'normal'
+        });
       }
       
       toast.success(`¡Juego terminado! Puntuación final: ${state.puntuacion}`);

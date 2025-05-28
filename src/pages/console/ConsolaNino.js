@@ -9,6 +9,10 @@ import Memorama from "./juegos/memorama/Memorama";
 import Eco from "./juegos/eco/SecuenciasPalabras";
 import Halli from "./juegos/halliGalli/HalliGalli";
 import Estadisticas from './Estadisticas'
+import NotificationCenter from "../../components/notifications/NotificationCenter";
+import NotificationIndicator from "../../components/notifications/NotificationIndicator";
+import { NotificationScheduler } from "../../services/notificationScheduler";
+
 
 function ConsolaNino() {
   const [perfilNino, setPerfilNino] = useState(null);
@@ -99,6 +103,12 @@ function ConsolaNino() {
       // Actualizar el estado local
       await fetchPerfilNino();
       toast.success(`¡Ganaste ${puntos} puntos!`);
+      
+      // Verificar logros después de actualizar puntos
+      const perfilActualizado = await getDoc(doc(db, "childProfiles", profileId));
+      if (perfilActualizado.exists()) {
+        await NotificationScheduler.verificarLogros(profileId, perfilActualizado.data());
+      }
     } catch (error) {
       console.error("Error actualizando puntos:", error);
       toast.error("Error al actualizar los puntos");
@@ -145,7 +155,7 @@ function ConsolaNino() {
                   <div className="text-xl font-bold">🏆</div>
                   <div className="text-xs">Logros</div>
                   <div className="text-sm font-bold">
-                    {perfilNino?.logros?.length || 0}
+                    {Object.keys(perfilNino?.logros || {}).length}
                   </div>
                 </div>
                 <div className="text-center">
@@ -170,8 +180,15 @@ function ConsolaNino() {
               <div className="bg-white bg-opacity-10 rounded-lg px-4 py-2 text-center">
                 <div className="text-xl font-bold">⏱️</div>
                 <div className="text-xs">Tiempo hoy</div>
-                <div className="text-sm font-bold">30 min</div>
+                <div className="text-sm font-bold">
+                  {Math.round((perfilNino?.tiempoTotal || 0) / 60)} min
+                </div>
               </div>
+
+              {/* Indicador de notificaciones */}
+              <NotificationIndicator 
+                onOpenCenter={() => setSeccionActiva("notificaciones")}
+              />
 
               {/* Botón para volver */}
               <button
@@ -269,7 +286,6 @@ function ConsolaNino() {
                   </div>
                 </div>
 
-                {/* Aquí se añadirán más juegos */}
                 {/* Carta de Halli Galli */}
                 <div className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-all">
                   <div className="h-40 bg-gray-50 flex items-center justify-center text-6xl">
@@ -339,7 +355,7 @@ function ConsolaNino() {
           )}
 
           {seccionActiva === "notificaciones" && (
-            <div>{/* Contenido de notificaciones */}</div>
+            <NotificationCenter />
           )}
         </div>
       </div>

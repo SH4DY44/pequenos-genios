@@ -5,6 +5,9 @@ import { toast } from 'react-toastify';
 import TutorialModal from './TutorialModal';
 import GameOverModal from './GameOverModal';
 import { NIVELES_CONFIG, CATEGORIAS, SONIDOS, ANIMACIONES } from './palabras';
+import { NotificationService } from '../../../../services/notificationService';
+import { auth } from '../../../../config/firebase';
+
 
 // Acciones del juego
 const GAME_ACTIONS = {
@@ -280,18 +283,23 @@ function SecuenciasPalabras({ perfilNino, onScoreUpdate, onClose }) {
   // Finalizar juego
   const finalizarJuego = async (victoria = false) => {
     try {
-      // Actualizar estadísticas en la base de datos
       await updateDoc(doc(db, 'childProfiles', perfilNino.id), {
         [`estadisticasJuegos.secuenciasPalabras.partidasJugadas`]: increment(1),
         [`estadisticasJuegos.secuenciasPalabras.${victoria ? 'victorias' : 'derrotas'}`]: increment(1),
         [`estadisticasJuegos.secuenciasPalabras.maxPuntuacion`]: Math.max((perfilNino?.estadisticasJuegos?.secuenciasPalabras?.maxPuntuacion || 0), state.puntuacion)
       });
-      
-      // Eliminamos esta línea para evitar la doble contabilización
-      // if (state.puntuacion > 0 && onScoreUpdate) {
-      //   await onScoreUpdate(state.puntuacion);
-      // }
-      
+      // Notificación persistente
+      if (auth.currentUser) {
+        await NotificationService.crearNotificacion({
+          tutorId: auth.currentUser.uid,
+          profileId: perfilNino.id,
+          tipo: 'logro_alcanzado',
+          titulo: 'Secuencias de Palabras: Juego terminado',
+          mensaje: `Puntuación final: ${state.puntuacion}`,
+          datos: { puntos: state.puntuacion, victoria },
+          prioridad: victoria ? 'alta' : 'normal'
+        });
+      }
       dispatch({ type: GAME_ACTIONS.END_GAME });
       toast.success(`¡Juego terminado! Puntuación final: ${state.puntuacion}`);
     } catch (error) {

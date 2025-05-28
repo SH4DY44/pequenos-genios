@@ -3,6 +3,8 @@ import { toast } from "react-toastify";
 import TutorialModal from "./TutorialModal";
 import { doc, updateDoc, increment } from "firebase/firestore";
 import { db } from "../../../../config/firebase";
+import { NotificationService } from '../../../../services/notificationService';
+import { auth } from '../../../../config/firebase';
 
 function Memorama({ perfilNino, onScoreUpdate, onClose }) {
   // Estados básicos
@@ -226,13 +228,21 @@ function Memorama({ perfilNino, onScoreUpdate, onClose }) {
         [`estadisticasJuegos.memorama.partidasJugadas`]: increment(1),
         [`estadisticasJuegos.memorama.${victoria ? 'victorias' : 'derrotas'}`]: increment(1),
         [`estadisticasJuegos.memorama.tiempoTotal`]: increment(tiempoJugado),
-        [`tiempoTotal`]: increment(tiempoJugado) // Actualizar tiempo total general
+        [`tiempoTotal`]: increment(tiempoJugado)
       });
       
-      // Eliminamos esta línea para evitar la doble contabilización
-      // if (victoria && onScoreUpdate) {
-      //   await onScoreUpdate(puntuacion);
-      // }
+      // Notificación persistente
+      if (auth.currentUser) {
+        await NotificationService.crearNotificacion({
+          tutorId: auth.currentUser.uid,
+          profileId: perfilNino.id,
+          tipo: 'logro_alcanzado',
+          titulo: 'Memorama: Juego terminado',
+          mensaje: `Puntuación final: ${puntuacion}`,
+          datos: { puntos: puntuacion, victoria },
+          prioridad: victoria ? 'alta' : 'normal'
+        });
+      }
       
     } catch (error) {
       console.error("Error al guardar estadísticas:", error);

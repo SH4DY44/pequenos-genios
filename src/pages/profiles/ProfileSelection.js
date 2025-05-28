@@ -18,6 +18,8 @@ import "react-toastify/dist/ReactToastify.css";
 import banner from "../../assets/images/banner.jpeg";
 import AddProfileModal from "../../components/profiles/AddProfileModal";
 import EditProfileModal from "../../components/profiles/EditProfileModal";
+import NotificationIndicator from "../../components/notifications/NotificationIndicator";
+import { NotificationScheduler } from "../../services/notificationScheduler";
 
 function ProfileSelection() {
   const [tutorName, setTutorName] = useState("");
@@ -264,6 +266,9 @@ function ProfileSelection() {
           </Link>
 
           <div className="relative">
+            <NotificationIndicator
+              onOpenCenter={() => navigate("/notificaciones")}
+            />
             <button
               onClick={() => setShowMenu(!showMenu)}
               className="flex items-center space-x-2 text-white hover:opacity-80"
