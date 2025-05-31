@@ -137,10 +137,12 @@ function NotificationIndicator({ onOpenCenter }) {
                           {notificacion.mensaje}
                         </p>
                         <p className="text-xs text-gray-400 mt-2">
-                          {formatDistanceToNow(notificacion.fechaCreacion, { 
-                            addSuffix: true, 
-                            locale: es 
-                          })}
+                          {notificacion.fechaCreacion instanceof Date && !isNaN(notificacion.fechaCreacion.getTime())
+                            ? formatDistanceToNow(notificacion.fechaCreacion, {
+                                addSuffix: true,
+                                locale: es
+                              })
+                            : 'Fecha desconocida'}
                         </p>
                       </div>
                       {notificacion.prioridad === 'alta' && (
