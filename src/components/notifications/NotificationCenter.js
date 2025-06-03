@@ -1,13 +1,14 @@
 // src/components/notifications/NotificationCenter.js
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNotifications } from '../../hooks/useNotifications';
-import { FaBell, FaCheck, FaTimes, FaExclamationTriangle, FaSync } from 'react-icons/fa';
+import { FaBell, FaCheck, FaTimes, FaExclamationTriangle, FaSync, FaPlus } from 'react-icons/fa';
 import { formatDistanceToNow } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { auth, db } from '../../config/firebase';
 import { query, where, getDocs, collection } from 'firebase/firestore';
 import { TutorService } from '../../services/tutorService';
 import { NotificationService } from '../../services/notificationService';
+import CreateReminderModal from './CreateReminderModal'; // 🆕 NUEVO IMPORT
 
 function NotificationCenter() {
   const {
@@ -19,7 +20,7 @@ function NotificationCenter() {
     cargarNotificaciones
   } = useNotifications();
 
-  // Estados locales
+  // Estados locales existentes
   const [perfiles, setPerfiles] = useState([]);
   const [perfilActivo, setPerfilActivo] = useState('todos');
   const [filtroActivo, setFiltroActivo] = useState('todas');
@@ -27,6 +28,9 @@ function NotificationCenter() {
   const [loadingMarcarTodas, setLoadingMarcarTodas] = useState(false);
   const [loadingPerfiles, setLoadingPerfiles] = useState(false);
   const [errorPerfiles, setErrorPerfiles] = useState(null);
+
+  // 🆕 NUEVO ESTADO para el modal de crear recordatorio
+  const [showCreateModal, setShowCreateModal] = useState(false);
 
   // ✅ CORREGIDO: Cargar perfiles de forma segura y eficiente
   const fetchPerfiles = useCallback(async () => {
@@ -101,8 +105,6 @@ function NotificationCenter() {
     }
   };
 
-
-
   // ✅ AGREGADO: Handler para marcar individual con feedback
   const handleMarcarComoLeida = async (notificacionId) => {
     if (!notificacionId) return;
@@ -115,14 +117,34 @@ function NotificationCenter() {
     }
   };
 
-  // Filtros disponibles
+  // 🆕 NUEVO: Handler para cuando se crea un recordatorio exitosamente
+  const handleReminderCreated = () => {
+    setShowCreateModal(false);
+    // Recargar notificaciones para mostrar el nuevo recordatorio
+    cargarNotificaciones();
+  };
+
+  // 🆕 NUEVO: Handler para abrir el modal de crear recordatorio
+  const handleOpenCreateModal = () => {
+    if (perfiles.length === 0) {
+      alert('Necesitas tener al menos un perfil de niño creado para poder enviar recordatorios.');
+      return;
+    }
+    setShowCreateModal(true);
+  };
+
+  // Filtros disponibles (🆕 AGREGADO: recordatorio_manual)
   const filtros = [
     { id: 'todas', nombre: 'Todas', icono: '📋' },
     { id: 'actividad_pendiente', nombre: 'Actividades', icono: '🎯' },
     { id: 'logro_alcanzado', nombre: 'Logros', icono: '🏆' },
     { id: 'resumen_semanal', nombre: 'Resúmenes', icono: '📊' },
     { id: 'evaluacion_recomendada', nombre: 'Evaluaciones', icono: '📋' },
-    { id: 'recordatorio_uso', nombre: 'Recordatorios', icono: '⏰' }
+    { id: 'recordatorio_uso', nombre: 'Recordatorios', icono: '⏰' },
+    { id: 'recordatorio_manual', nombre: 'Mis Recordatorios', icono: '💬' }, // 🆕 NUEVO FILTRO
+    { id: 'cita_especialista', nombre: 'Citas Médicas', icono: '🏥' }, // 🆕 NUEVO FILTRO
+    { id: 'medicamento', nombre: 'Medicamentos', icono: '💊' }, // 🆕 NUEVO FILTRO
+    { id: 'tarea_especial', nombre: 'Tareas', icono: '📚' } // 🆕 NUEVO FILTRO
   ];
 
   // ✅ CORREGIDO: Filtrar notificaciones con validación
@@ -145,7 +167,7 @@ function NotificationCenter() {
     return true;
   });
 
-  // ✅ CORREGIDO: Funciones con validación
+  // ✅ CORREGIDO: Funciones con validación (🆕 AGREGADOS: nuevos iconos)
   const obtenerIcono = (tipo) => {
     const iconos = {
       actividad_pendiente: '🎯',
@@ -153,6 +175,10 @@ function NotificationCenter() {
       resumen_semanal: '📊',
       evaluacion_recomendada: '📋',
       recordatorio_uso: '⏰',
+      recordatorio_manual: '💬', // 🆕 NUEVO
+      cita_especialista: '🏥', // 🆕 NUEVO
+      medicamento: '💊', // 🆕 NUEVO
+      tarea_especial: '📚', // 🆕 NUEVO
       default: '📢'
     };
     return iconos[tipo] || iconos.default;
@@ -220,6 +246,16 @@ function NotificationCenter() {
             Centro de Notificaciones
           </h2>
           <div className="flex gap-2">
+            {/* 🆕 NUEVO BOTÓN: Crear Recordatorio */}
+            <button
+              onClick={handleOpenCreateModal}
+              className="px-4 py-2 bg-[var(--primary-blue)] text-white rounded-lg hover:opacity-90 
+                       transition-all flex items-center gap-2 font-medium"
+            >
+              <FaPlus />
+              Crear Recordatorio
+            </button>
+
             <button
               onClick={() => cargarNotificaciones()}
               disabled={loading}
@@ -245,28 +281,6 @@ function NotificationCenter() {
                 {loadingMarcarTodas ? 'Marcando...' : 'Marcar todas como leídas'}
               </button>
             )}
-
-            <button 
-              onClick={async () => {
-                try {
-                  const notifId = await NotificationService.crearRecordatorioManual(
-                    auth.currentUser.uid,
-                    'test-profile-id',
-                    {
-                      titulo: 'Prueba de recordatorio',
-                      mensaje: 'Este es un recordatorio de prueba',
-                      nombreNino: 'Niño de Prueba'
-                    }
-                  );
-                  alert(`✅ Recordatorio creado con ID: ${notifId}`);
-                } catch (error) {
-                  alert(`❌ Error: ${error.message}`);
-                }
-              }}
-              className="px-4 py-2 bg-purple-500 text-white rounded ml-2"
-            >
-              🧪 Probar Recordatorio
-            </button>
           </div>
         </div>
 
@@ -328,7 +342,17 @@ function NotificationCenter() {
           </div>
         )}
 
-        {/* Filtros por tipo */}
+        {/* 🆕 MENSAJE INFO: Si no hay perfiles */}
+        {perfiles.length === 0 && !loadingPerfiles && !errorPerfiles && (
+          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mb-4 flex items-center gap-2">
+            <FaExclamationTriangle className="text-yellow-500" />
+            <span className="text-yellow-700 text-sm">
+              Necesitas crear al menos un perfil de niño para poder enviar recordatorios personalizados.
+            </span>
+          </div>
+        )}
+
+        {/* Filtros por tipo (🆕 MEJORADO: con más tipos) */}
         <div className="flex flex-wrap gap-2 mb-4">
           {filtros.map(filtro => (
             <button
@@ -371,7 +395,7 @@ function NotificationCenter() {
           <div className="p-12 text-center text-gray-500">
             <FaBell className="text-4xl mx-auto mb-4 opacity-50" />
             <h3 className="text-lg font-medium mb-2">No hay notificaciones</h3>
-            <p className="text-sm">
+            <p className="text-sm mb-4">
               {mostrarSoloNoLeidas 
                 ? 'No tienes notificaciones sin leer'
                 : filtroActivo !== 'todas' 
@@ -379,6 +403,17 @@ function NotificationCenter() {
                   : 'Todas las notificaciones aparecerán aquí'
               }
             </p>
+            {/* 🆕 BOTÓN DE ACCIÓN cuando no hay notificaciones */}
+            {filtroActivo === 'todas' && perfiles.length > 0 && (
+              <button
+                onClick={handleOpenCreateModal}
+                className="px-6 py-3 bg-[var(--primary-blue)] text-white rounded-lg hover:opacity-90 
+                         transition-all flex items-center gap-2 mx-auto"
+              >
+                <FaPlus />
+                Crear mi primer recordatorio
+              </button>
+            )}
           </div>
         ) : (
           <div className="divide-y divide-gray-100">
@@ -407,6 +442,12 @@ function NotificationCenter() {
                             Nuevo
                           </span>
                         )}
+                        {/* 🆕 NUEVO: Badge para recordatorios manuales */}
+                        {notificacion.datos?.creadorPor === 'tutor' && (
+                          <span className="bg-purple-100 text-purple-800 text-xs px-2 py-1 rounded-full">
+                            Mi recordatorio
+                          </span>
+                        )}
                       </div>
                       <p className="text-gray-700 text-sm mb-2">
                         {notificacion.mensaje || 'Sin mensaje'}
@@ -419,6 +460,22 @@ function NotificationCenter() {
                         {notificacion.profileId && (
                           <span>
                             Perfil: {notificacion.datos?.nombreNino || 'N/A'}
+                          </span>
+                        )}
+                        {/* 🆕 NUEVO: Mostrar información específica según el tipo */}
+                        {notificacion.datos?.especialista && (
+                          <span>
+                            👨‍⚕️ {notificacion.datos.especialista}
+                          </span>
+                        )}
+                        {notificacion.datos?.medicamento && (
+                          <span>
+                            💊 {notificacion.datos.medicamento}
+                          </span>
+                        )}
+                        {notificacion.datos?.materia && (
+                          <span>
+                            📚 {notificacion.datos.materia}
                           </span>
                         )}
                       </div>
@@ -456,6 +513,14 @@ function NotificationCenter() {
           </div>
         )}
       </div>
+
+      {/* 🆕 NUEVO: Modal para crear recordatorios */}
+      <CreateReminderModal
+        isOpen={showCreateModal}
+        onClose={() => setShowCreateModal(false)}
+        perfiles={perfiles}
+        onSuccess={handleReminderCreated}
+      />
     </div>
   );
 }
