@@ -5,6 +5,7 @@ import { doc, updateDoc, increment } from "firebase/firestore";
 import { db } from "../../../../config/firebase";
 import { NotificationService } from '../../../../services/notificationService';
 import { auth } from '../../../../config/firebase';
+import { RewardsService } from '../../../../services/rewardsService';
 
 function Memorama({ perfilNino, onScoreUpdate, onClose }) {
   // Estados básicos
@@ -213,40 +214,101 @@ function Memorama({ perfilNino, onScoreUpdate, onClose }) {
   };
 
   const finalizarJuego = async (victoria = false) => {
-    setJuegoTerminado(true);
-    
-    try {
-      // Calcular tiempo total jugado
-      const tiempoJugado = tiempoTranscurrido;
+    if (!juegoTerminado) {
+      setJuegoTerminado(true);
       
-      // Actualizar estadísticas en la base de datos
-      await updateDoc(doc(db, 'childProfiles', perfilNino.id), {
-        [`estadisticasJuegos.memorama.maxPuntuacion`]: Math.max(
-          (perfilNino?.estadisticasJuegos?.memorama?.maxPuntuacion || 0), 
-          puntuacion
-        ),
-        [`estadisticasJuegos.memorama.partidasJugadas`]: increment(1),
-        [`estadisticasJuegos.memorama.${victoria ? 'victorias' : 'derrotas'}`]: increment(1),
-        [`estadisticasJuegos.memorama.tiempoTotal`]: increment(tiempoJugado),
-        [`tiempoTotal`]: increment(tiempoJugado)
-      });
+      // Calcular puntos con el sistema de recompensas
+      const config = configuracionNivel[perfilNino?.resultadosEvaluacion?.nivelAsignado?.nivel || 'basico'];
+      let puntosBase = config.puntosPorAcierto * cartasEmparejadas.length / 2;
       
-      // Notificación persistente
-      if (auth.currentUser) {
-        await NotificationService.crearNotificacion({
-          tutorId: auth.currentUser.uid,
-          profileId: perfilNino.id,
-          tipo: 'logro_alcanzado',
-          titulo: 'Memorama: Juego terminado',
-          mensaje: `Puntuación final: ${puntuacion}`,
-          datos: { puntos: puntuacion, victoria },
-          prioridad: victoria ? 'alta' : 'normal'
-        });
+      // Bonificaciones
+      let puntosFinales = puntosBase;
+      let bonificaciones = [];
+      
+      // Bonificación por tiempo (si hay límite y lo cumplió)
+      if (config.tiempoLimite && tiempoTranscurrido < config.tiempoLimite * 0.7) {
+        const bonusVelocidad = Math.floor(puntosBase * 0.5);
+        puntosFinales += bonusVelocidad;
+        bonificaciones.push(`⚡ Velocidad: +${bonusVelocidad}`);
       }
       
-    } catch (error) {
-      console.error("Error al guardar estadísticas:", error);
-      toast.error("Error al guardar las estadísticas");
+      // Bonificación por combo perfecto
+      if (maxCombo >= 5) {
+        const bonusCombo = Math.floor(puntosBase * 0.3);
+        puntosFinales += bonusCombo;
+        bonificaciones.push(`🔥 Combo máximo: +${bonusCombo}`);
+      }
+      
+      // Aplicar multiplicador de eventos si existe
+      puntosFinales = RewardsService.aplicarMultiplicadorEvento(puntosFinales, 'memorama');
+      
+      try {
+        // Agregar puntos al perfil
+        await RewardsService.agregarPuntos(
+          perfilNino.id,
+          puntosFinales,
+          `Memorama completado - Nivel: ${config.descripcion}`
+        );
+
+        // Actualizar estadísticas del juego para logros
+        const datosProgreso = {
+          ...perfilNino,
+          actividadesCompletadas: (perfilNino.actividadesCompletadas || 0) + 1,
+          puntosTotales: (perfilNino.puntosTotales || 0) + puntosFinales,
+          estadisticasJuegos: {
+            ...perfilNino.estadisticasJuegos,
+            memorama: {
+              ...perfilNino.estadisticasJuegos?.memorama,
+              victorias: (perfilNino.estadisticasJuegos?.memorama?.victorias || 0) + 1,
+              puntosTotales: (perfilNino.estadisticasJuegos?.memorama?.puntosTotales || 0) + puntosFinales,
+              mejorTiempo: Math.min(
+                perfilNino.estadisticasJuegos?.memorama?.mejorTiempo || Infinity,
+                tiempoTranscurrido
+              ),
+              maxComboAlcanzado: Math.max(
+                perfilNino.estadisticasJuegos?.memorama?.maxComboAlcanzado || 0,
+                maxCombo
+              )
+            }
+          }
+        };
+
+        // Verificar nuevos logros
+        const nuevosLogros = await RewardsService.verificarYOtorgarLogros(
+          perfilNino.id,
+          datosProgreso
+        );
+
+        // Mostrar logros si los hay
+        if (nuevosLogros.length > 0) {
+          toast.success(`🎉 ¡${nuevosLogros.length} nuevo${nuevosLogros.length > 1 ? 's' : ''} logro${nuevosLogros.length > 1 ? 's' : ''}!`);
+        }
+
+        // Actualizar puntuación en la UI
+        setPuntuacion(puntosFinales);
+        
+        // Notificar al componente padre
+        if (onScoreUpdate) {
+          onScoreUpdate({
+            puntos: puntosFinales,
+            bonificaciones,
+            nombreJuego: 'Memorama',
+            tipoJuego: 'memorama',
+            nivel: perfilNino?.resultadosEvaluacion?.nivelAsignado?.nivel,
+            tiempoTranscurrido,
+            combo: maxCombo
+          });
+        }
+
+        // Actualizar juegos completados en la BD
+        await updateDoc(doc(db, 'childProfiles', perfilNino.id), {
+          juegosCompletados: increment(1)
+        });
+
+      } catch (error) {
+        console.error('Error finalizando juego:', error);
+        toast.error('Error al guardar el progreso');
+      }
     }
   };
 

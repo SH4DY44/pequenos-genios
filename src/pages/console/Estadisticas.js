@@ -71,6 +71,11 @@ function Estadisticas({ profileId }) {
     return Object.keys(perfilNino.registroActividades).length;
   };
 
+  // Calcular total de juegos completados
+  const totalJuegosCompletados = (perfilNino?.juegosCompletados || 0) + (perfilNino?.estadisticasJuegos ? Object.values(perfilNino.estadisticasJuegos).reduce((acc, juego) => acc + (juego.partidasJugadas || 0), 0) : 0);
+  const totalActividades = perfilNino?.actividadesCompletadas || 0;
+  const totalCompletados = totalActividades + totalJuegosCompletados;
+
   return (
     <div className="p-6">
       <h2 className="text-2xl font-bold mb-6 text-[var(--primary-blue)]">Estadísticas de Progreso</h2>
@@ -78,24 +83,17 @@ function Estadisticas({ profileId }) {
       {/* Tarjetas de resumen */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
         <div className="bg-white p-4 rounded-lg shadow border-l-4 border-[var(--primary-blue)]">
-          <h3 className="text-sm font-medium text-gray-500">Total de Actividades</h3>
-          <p className="text-2xl font-bold">{perfilNino?.actividadesCompletadas || 0}</p>
+          <h3 className="text-sm font-medium text-gray-500">Actividades Completadas</h3>
+          <p className="text-2xl font-bold">{totalActividades}</p>
         </div>
-        
         <div className="bg-white p-4 rounded-lg shadow border-l-4 border-[var(--primary-green)]">
-          <h3 className="text-sm font-medium text-gray-500">Puntos Acumulados</h3>
-          <p className="text-2xl font-bold">{perfilNino?.puntosTotales || 0}</p>
+          <h3 className="text-sm font-medium text-gray-500">Juegos Completados</h3>
+          <p className="text-2xl font-bold">{totalJuegosCompletados}</p>
         </div>
-        
         <div className="bg-white p-4 rounded-lg shadow border-l-4 border-purple-500">
-          <h3 className="text-sm font-medium text-gray-500">Tiempo Total</h3>
-          <p className="text-2xl font-bold">
-            {perfilNino?.tiempoTotal 
-              ? `${Math.floor(perfilNino.tiempoTotal / 60)} min` 
-              : '0 min'}
-          </p>
+          <h3 className="text-sm font-medium text-gray-500">Total Combinado</h3>
+          <p className="text-2xl font-bold">{totalCompletados}</p>
         </div>
-        
         <div className="bg-white p-4 rounded-lg shadow border-l-4 border-yellow-500">
           <h3 className="text-sm font-medium text-gray-500">Días Activos</h3>
           <p className="text-2xl font-bold">{calcularDiasActivos()}</p>

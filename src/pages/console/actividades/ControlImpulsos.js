@@ -62,6 +62,7 @@ function ControlImpulsos({ actividad, perfilNino, onComplete, onClose }) {
       await updateDoc(perfilRef, {
         [`estadisticasActividades.${actividad.categoria}.completadas`]: increment(1),
         [`estadisticasActividades.${actividad.categoria}.puntuacion`]: increment(puntosFinales),
+        actividadesCompletadas: increment(1),
         ultimaActividad: new Date()
       });
       toast.success("Progreso guardado");

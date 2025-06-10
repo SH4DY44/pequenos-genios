@@ -3,6 +3,7 @@ import { toast } from 'react-toastify';
 import { useNavigate } from 'react-router-dom';
 import { doc, updateDoc, increment, getDoc } from 'firebase/firestore';
 import { db } from '../../../config/firebase';
+import { RewardsService } from '../../../services/rewardsService';
 
 const emociones = [
   { id: 'felicidad', nombre: 'Felicidad', emoji: '😀' },
@@ -174,39 +175,80 @@ function ReconocimientoEmociones({ actividad, perfilNino, onComplete, onClose, r
   };
   
   // Función para finalizar la actividad y redirigir
-  const finalizarActividad = (puntuacionFinal) => {
+  const finalizarActividad = async () => {
+    if (actividadCompletada) return;
+    
+    setActividadCompletada(true);
+    setCargando(true);
+
     try {
-      // Intentar usar onComplete si está disponible
-      if (typeof onComplete === 'function') {
-        console.log("Llamando a onComplete con puntuación:", puntuacionFinal);
-        onComplete({ 
-          puntuacion: puntuacionFinal,
-          completada: true
-        });
-      } else {
-        console.log("onComplete no disponible, usando navegación directa");
-        // Si no hay onComplete, intentar usar onClose
-        if (typeof onClose === 'function') {
-          onClose();
-        } else {
-          // Si no hay onClose, navegar directamente a /console
-          navigate('/console', { 
-            state: { profileId: perfilNino?.id } 
+      // Calcular puntos basados en el rendimiento
+      const porcentajeAciertos = (puntuacion / totalRondas) * 100;
+      let puntosBase = Math.floor(porcentajeAciertos * 2); // 2 puntos por % de acierto
+      let puntosFinales = puntosBase;
+      let bonificaciones = [];
+
+      // Bonificaciones
+      if (porcentajeAciertos === 100) {
+        const bonusPerfecto = 50;
+        puntosFinales += bonusPerfecto;
+        bonificaciones.push(`💎 Perfección: +${bonusPerfecto}`);
+      } else if (porcentajeAciertos >= 80) {
+        const bonusExcelente = 25;
+        puntosFinales += bonusExcelente;
+        bonificaciones.push(`⭐ Excelente: +${bonusExcelente}`);
+      }
+
+      // Agregar puntos al sistema
+      await RewardsService.agregarPuntos(
+        perfilNino.id,
+        puntosFinales,
+        `Reconocimiento de Emociones - ${porcentajeAciertos}% aciertos`
+      );
+
+      // Actualizar estadísticas para logros
+      const datosProgreso = {
+        ...perfilNino,
+        actividadesCompletadas: (perfilNino.actividadesCompletadas || 0) + 1,
+        puntosTotales: (perfilNino.puntosTotales || 0) + puntosFinales,
+        estadisticasCategorias: {
+          ...perfilNino.estadisticasCategorias,
+          'habilidades-sociales': {
+            ...perfilNino.estadisticasCategorias?.['habilidades-sociales'],
+            completadas: (perfilNino.estadisticasCategorias?.['habilidades-sociales']?.completadas || 0) + 1,
+            puntuacionTotal: (perfilNino.estadisticasCategorias?.['habilidades-sociales']?.puntuacionTotal || 0) + puntosFinales
+          }
+        },
+        actividadesPerfectas: porcentajeAciertos === 100 ? 
+          (perfilNino.actividadesPerfectas || 0) + 1 : 
+          (perfilNino.actividadesPerfectas || 0)
+      };
+
+      // Verificar logros
+      await RewardsService.verificarYOtorgarLogros(perfilNino.id, datosProgreso);
+
+      // Notificar éxito
+      toast.success(`¡Actividad completada! +${puntosFinales} puntos`);
+
+      // Navegar de vuelta
+      setTimeout(() => {
+        if (onComplete) {
+          onComplete({
+            puntos: puntosFinales,
+            bonificaciones,
+            porcentajeAciertos,
+            nombreActividad: 'Reconocimiento de Emociones'
           });
+        } else {
+          navigate('/console', { state: { profileId: perfilNino?.id } });
         }
-      }
+      }, 2000);
+
     } catch (error) {
-      console.error("Error al finalizar actividad:", error);
-      // En caso de error, intentar navegar directamente a /console
-      try {
-        navigate('/console', { 
-          state: { profileId: perfilNino?.id } 
-        });
-      } catch (navError) {
-        console.error("Error al navegar:", navError);
-        // Último recurso: recargar la página
-        window.location.href = '/console';
-      }
+      console.error('Error finalizando actividad:', error);
+      toast.error('Error al guardar el progreso');
+    } finally {
+      setCargando(false);
     }
   };
   

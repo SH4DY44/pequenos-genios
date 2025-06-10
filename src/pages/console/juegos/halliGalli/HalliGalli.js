@@ -144,7 +144,8 @@ function HalliGalli({ perfilNino, onScoreUpdate, onClose }) {
         [`estadisticasJuegos.halliGalli.partidasJugadas`]: increment(1),
         [`estadisticasJuegos.halliGalli.${victoria ? 'victorias' : 'derrotas'}`]: increment(1),
         [`estadisticasJuegos.halliGalli.tiempoTotal`]: increment(tiempoJugado),
-        [`tiempoTotal`]: increment(tiempoJugado) // Actualizar tiempo total general
+        [`tiempoTotal`]: increment(tiempoJugado), // Actualizar tiempo total general
+        juegosCompletados: increment(1)
       });
       
       // Actualizar puntos globales
