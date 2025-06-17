@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
-import { doc, getDoc, updateDoc, increment, Timestamp } from "firebase/firestore";
+import { doc, getDoc, updateDoc, increment, Timestamp, onSnapshot } from "firebase/firestore";
 import { db } from "../../config/firebase";
 import { FaGamepad, FaBook, FaChartBar, FaBell, FaTrophy, FaGift, FaCoins, FaStar } from "react-icons/fa";
 import { toast } from "react-toastify";
@@ -25,55 +25,50 @@ function ConsolaNino() {
   const [juegoSeleccionado, setJuegoSeleccionado] = useState(null);
   const [nuevosLogros, setNuevosLogros] = useState([]);
 
-  // Función para cargar el perfil del niño
-  const fetchPerfilNino = async () => {
+  // Inicializar el sistema de recompensas si es necesario
+  useEffect(() => {
+    const inicializarRecompensas = async () => {
+      if (profileId) {
+        const perfilRef = doc(db, "childProfiles", profileId);
+        const perfilDoc = await getDoc(perfilRef);
+
+        if (!perfilDoc.exists() || perfilDoc.data().puntosTotales === undefined) {
+          await RewardsService.inicializarSistemaRecompensas(profileId);
+        }
+      }
+    };
+    inicializarRecompensas();
+  }, [profileId]);
+
+  // Cargar perfil y establecer listener en tiempo real
+  useEffect(() => {
     if (!profileId) {
       navigate("/profile-selection");
       return;
     }
 
-    try {
-      const perfilDoc = await getDoc(doc(db, "childProfiles", profileId));
-      if (perfilDoc.exists()) {
-        setPerfilNino({ ...perfilDoc.data(), id: profileId });
+    setLoading(true);
+    const perfilRef = doc(db, "childProfiles", profileId);
+
+    const unsubscribe = onSnapshot(perfilRef, (docSnap) => {
+      if (docSnap.exists()) {
+        setPerfilNino({ ...docSnap.data(), id: profileId });
       } else {
+        console.log("El perfil del niño no existe, redirigiendo...");
         navigate("/profile-selection");
       }
-    } catch (error) {
-      console.error("Error al cargar el perfil:", error);
-    }
-  };
-
-  // Inicializar el sistema de recompensas si es necesario
-  useEffect(() => {
-    const inicializarRecompensas = async () => {
-      if (profileId && perfilNino) {
-        try {
-          // Verificar si ya tiene el sistema inicializado
-          if (perfilNino.puntosTotales === undefined) {
-            await RewardsService.inicializarSistemaRecompensas(profileId);
-            // Recargar el perfil para obtener los datos actualizados
-            await fetchPerfilNino();
-          }
-        } catch (error) {
-          console.error('Error inicializando sistema de recompensas:', error);
-        }
-      }
-    };
-
-    inicializarRecompensas();
-  }, [profileId, perfilNino]);
-
-  // Cargar perfil al inicio
-  useEffect(() => {
-    const cargarPerfil = async () => {
-      await fetchPerfilNino();
       setLoading(false);
-    };
-    cargarPerfil();
+    }, (error) => {
+      console.error("Error al escuchar el perfil en tiempo real:", error);
+      setLoading(false);
+      toast.error("Error al cargar el perfil. Intenta de nuevo.");
+    });
+
+    // Limpiar el listener cuando el componente se desmonte
+    return () => unsubscribe();
   }, [profileId, navigate]);
 
-  // Verificar logros periódicamente
+  // Verificar logros periódicamente (ahora con el perfil actualizado por onSnapshot)
   useEffect(() => {
     if (perfilNino && profileId) {
       verificarNuevosLogros();
@@ -85,8 +80,7 @@ function ConsolaNino() {
       const logros = await RewardsService.verificarYOtorgarLogros(profileId, perfilNino);
       if (logros.length > 0) {
         setNuevosLogros(logros);
-        // Recargar estadísticas después de nuevos logros
-        setTimeout(fetchPerfilNino, 1000);
+        // Ya no es necesario recargar el perfil, onSnapshot se encargará
       }
     } catch (error) {
       console.error('Error verificando logros:', error);
@@ -151,9 +145,6 @@ function ConsolaNino() {
       if (mensajeRecompensas.length > 0) {
         toast.success(`¡Recompensas obtenidas! ${mensajeRecompensas.join(', ')}`);
       }
-
-      // Recargar el perfil para mostrar los cambios
-      await fetchPerfilNino();
 
     } catch (error) {
       console.error('Error actualizando puntuación:', error);

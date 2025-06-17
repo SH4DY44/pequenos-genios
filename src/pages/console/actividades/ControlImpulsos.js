@@ -3,6 +3,7 @@ import { toast } from 'react-toastify';
 import { useNavigate } from 'react-router-dom';
 import { doc, updateDoc, increment, getDoc } from 'firebase/firestore';
 import { db } from '../../../config/firebase';
+import { RewardsService } from '../../../services/rewardsService';
 
 const GAME_STATE = {
   TUTORIAL: 'tutorial',
@@ -78,9 +79,31 @@ function ControlImpulsos({ actividad, perfilNino, onComplete, onClose }) {
   const finalizarActividad = useCallback(async () => {
     setActividadCompletada(true);
     setGameState(GAME_STATE.COMPLETADO);
-    await actualizarPuntosEnFirebase(puntuacion);
-    onComplete?.({ puntuacion, completada: true });
-  }, [actualizarPuntosEnFirebase, onComplete, puntuacion]);
+    
+    try {
+      // Calcular porcentaje de aciertos
+      const porcentajeAciertos = (puntuacion / (totalRondas * configActual.puntosPorAcierto)) * 100;
+      
+      // Actualizar puntos en Firebase
+      await actualizarPuntosEnFirebase(puntuacion);
+      
+      // Otorgar recompensa de estrellas
+      await RewardsService.otorgarRecompensaActividad(
+        perfilNino.id,
+        actividad.id,
+        {
+          porcentajeCorrecto: 0,
+          tiempo: 0,
+          tiempoObjetivo: 0
+        }
+      );
+      
+      onComplete?.({ puntuacion, completada: true });
+    } catch (error) {
+      console.error('Error finalizando actividad:', error);
+      toast.error('Error al guardar el progreso');
+    }
+  }, [actualizarPuntosEnFirebase, onComplete, puntuacion, totalRondas, configActual, perfilNino, actividad]);
 
   // Funciones del juego (orden corregido)
   const pasarSiguienteRonda = useCallback((delay) => {

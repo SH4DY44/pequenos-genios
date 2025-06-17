@@ -33,7 +33,26 @@ export const TipoRecompensa = {
     GEMAS: 'gemas'              // Moneda especial
   };
   
-  // Logros predefinidos del sistema
+  // Funciones de condición para cada logro
+  export const LogroCondiciones = {
+    primera_actividad: (data) => (data.actividadesCompletadas || 0) >= 1,
+    diez_actividades: (data) => (data.actividadesCompletadas || 0) >= 10,
+    cincuenta_actividades: (data) => (data.actividadesCompletadas || 0) >= 50,
+    cien_puntos: (data) => (data.puntosTotales || 0) >= 100,
+    mil_puntos: (data) => (data.puntosTotales || 0) >= 1000,
+    primera_semana: (data) => (data.racha || 0) >= 7,
+    un_mes_consistente: (data) => (data.racha || 0) >= 30,
+    memorama_master: (data) => (data.estadisticasJuegos?.memorama?.victorias || 0) >= 10,
+    velocista_eco: (data) => (data.estadisticasJuegos?.eco?.tiemposRecord || 0) >= 5,
+    perfeccionista: (data) => (data.actividadesPerfectas || 0) >= 5,
+    explorador: (data) => {
+      const categorias = Object.keys(data.estadisticasCategorias || {});
+      return categorias.length >= 5; // Todas las categorías disponibles
+    },
+    // Agrega aquí todas las demás condiciones de logros
+  };
+  
+  // Logros predefinidos del sistema (SIN LA PROPIEDAD 'condicion')
   export const LogrosDisponibles = {
     // LOGROS DE PROGRESO
     primera_actividad: {
@@ -46,8 +65,7 @@ export const TipoRecompensa = {
       recompensa: {
         puntos: 50,
         estrellas: 1
-      },
-      condicion: (data) => (data.actividadesCompletadas || 0) >= 1
+      }
     },
     
     diez_actividades: {
@@ -60,8 +78,7 @@ export const TipoRecompensa = {
       recompensa: {
         puntos: 100,
         estrellas: 2
-      },
-      condicion: (data) => (data.actividadesCompletadas || 0) >= 10
+      }
     },
     
     cincuenta_actividades: {
@@ -78,8 +95,7 @@ export const TipoRecompensa = {
           tipo: TipoRecompensa.INSIGNIA,
           id: 'insignia_aprendiz'
         }
-      },
-      condicion: (data) => (data.actividadesCompletadas || 0) >= 50
+      }
     },
   
     // LOGROS DE PUNTOS
@@ -93,8 +109,7 @@ export const TipoRecompensa = {
       recompensa: {
         puntos: 50,
         estrellas: 1
-      },
-      condicion: (data) => (data.puntosTotales || 0) >= 100
+      }
     },
     
     mil_puntos: {
@@ -111,8 +126,7 @@ export const TipoRecompensa = {
           tipo: TipoRecompensa.TROFEO,
           id: 'trofeo_maestro_puntos'
         }
-      },
-      condicion: (data) => (data.puntosTotales || 0) >= 1000
+      }
     },
   
     // LOGROS DE CONSISTENCIA
@@ -126,8 +140,7 @@ export const TipoRecompensa = {
       recompensa: {
         puntos: 150,
         estrellas: 3
-      },
-      condicion: (data) => (data.racha || 0) >= 7
+      }
     },
     
     un_mes_consistente: {
@@ -144,8 +157,7 @@ export const TipoRecompensa = {
           tipo: TipoRecompensa.EFECTO,
           id: 'efecto_fuego'
         }
-      },
-      condicion: (data) => (data.racha || 0) >= 30
+      }
     },
   
     // LOGROS DE JUEGOS ESPECÍFICOS
@@ -159,8 +171,7 @@ export const TipoRecompensa = {
       recompensa: {
         puntos: 200,
         estrellas: 4
-      },
-      condicion: (data) => (data.estadisticasJuegos?.memorama?.victorias || 0) >= 10
+      }
     },
     
     velocista_eco: {
@@ -173,8 +184,7 @@ export const TipoRecompensa = {
       recompensa: {
         puntos: 180,
         estrellas: 3
-      },
-      condicion: (data) => (data.estadisticasJuegos?.eco?.tiemposRecord || 0) >= 5
+      }
     },
   
     // LOGROS ESPECIALES
@@ -192,8 +202,7 @@ export const TipoRecompensa = {
           tipo: TipoRecompensa.MARCO,
           id: 'marco_diamante'
         }
-      },
-      condicion: (data) => (data.actividadesPerfectas || 0) >= 5
+      }
     },
     
     explorador: {
@@ -210,10 +219,6 @@ export const TipoRecompensa = {
           tipo: TipoRecompensa.AVATAR,
           id: 'avatar_explorador'
         }
-      },
-      condicion: (data) => {
-        const categorias = Object.keys(data.estadisticasCategorias || {});
-        return categorias.length >= 5; // Todas las categorías disponibles
       }
     }
   };
@@ -407,6 +412,7 @@ export const TipoRecompensa = {
     CategoriaLogro,
     RarezaRecompensa,
     TipoMoneda,
+    LogroCondiciones,
     LogrosDisponibles,
     RecompensasEspeciales,
     ConfiguracionTienda,

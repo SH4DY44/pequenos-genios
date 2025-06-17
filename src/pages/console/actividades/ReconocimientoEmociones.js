@@ -176,7 +176,11 @@ function ReconocimientoEmociones({ actividad, perfilNino, onComplete, onClose, r
   
   // Función para finalizar la actividad y redirigir
   const finalizarActividad = async () => {
-    if (actividadCompletada) return;
+    console.log("DEBUG: Inicia finalizarActividad");
+    if (actividadCompletada) {
+      console.log("DEBUG: Actividad ya completada, saliendo de finalizarActividad");
+      return;
+    }
     
     setActividadCompletada(true);
     setCargando(true);
@@ -204,6 +208,23 @@ function ReconocimientoEmociones({ actividad, perfilNino, onComplete, onClose, r
         perfilNino.id,
         puntosFinales,
         `Reconocimiento de Emociones - ${porcentajeAciertos}% aciertos`
+      );
+
+      console.log("DEBUG: Llamando a otorgarRecompensaActividad con:", {
+        profileId: perfilNino.id,
+        actividadId: actividad.id,
+        resultado: { porcentajeCorrecto: porcentajeAciertos, tiempo: 0, tiempoObjetivo: 0 }
+      });
+
+      // Otorgar recompensa de estrellas
+      await RewardsService.otorgarRecompensaActividad(
+        perfilNino.id,
+        actividad.id,
+        {
+          porcentajeCorrecto: porcentajeAciertos,
+          tiempo: 0, // No aplica para esta actividad
+          tiempoObjetivo: 0 // No aplica para esta actividad
+        }
       );
 
       // Actualizar estadísticas para logros
@@ -350,8 +371,8 @@ function ReconocimientoEmociones({ actividad, perfilNino, onComplete, onClose, r
         console.error("Error al almacenar info de navegación:", e);
       }
       
-      // --- ELIMINAR ESTA LÍNEA ---
-      // finalizarActividad(puntuacionActualizada);
+      // --- ANTES ELIMINADO: FINALIZAR ACTIVIDAD ---
+      finalizarActividad();
       // --------------------------
       
     } else {

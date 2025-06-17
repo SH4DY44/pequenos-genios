@@ -3,6 +3,7 @@ import { FaCheckCircle, FaTimes, FaEye, FaCog, FaShirt, FaPalette, FaLock } from
 import { toast } from 'react-toastify';
 import { RewardsService } from '../../services/rewardsService';
 import { TipoRecompensa, RewardsUtils } from '../../utils/rewards/rewardsTypes';
+import StarTracker from './StarTracker';
 
 function InventoryDisplay({ profileId, onEquipar }) {
   const [inventario, setInventario] = useState({});
@@ -123,6 +124,9 @@ function InventoryDisplay({ profileId, onEquipar }) {
 
   return (
     <div className="space-y-6">
+      {/* Star Tracker */}
+      <StarTracker profileId={profileId} />
+      
       {/* Header del inventario */}
       <div className="flex items-center justify-between">
         <div>

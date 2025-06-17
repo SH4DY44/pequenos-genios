@@ -5,7 +5,8 @@ import {
   RecompensasEspeciales, 
   TipoMoneda, 
   RarezaRecompensa,
-  TipoRecompensa 
+  TipoRecompensa,
+  LogroCondiciones
 } from '../utils/rewards/rewardsTypes';
 import { NotificationService } from './notificationService';
 
@@ -37,8 +38,11 @@ export class RewardsService {
         // Saltar si ya tiene este logro
         if (logrosActuales[logroId]) continue;
         
+        // Obtener la función de condición por separado
+        const condicionFn = LogroCondiciones[logroId];
+        
         // Verificar si cumple la condición
-        if (logro.condicion(datosProgreso)) {
+        if (condicionFn && condicionFn(datosProgreso)) {
           // Otorgar el logro
           await this.otorgarLogro(profileId, logro);
           nuevosLogros.push(logro);
@@ -61,13 +65,21 @@ export class RewardsService {
    */
   static async otorgarLogro(profileId, logro) {
     try {
+      console.log("DEBUG: Objeto logro al inicio de otorgarLogro:", logro);
       const perfilRef = doc(db, 'childProfiles', profileId);
       const timestamp = Timestamp.now();
+      
+      // Crear una copia del objeto logro y eliminar explícitamente la función 'condicion'
+      const logroParaGuardar = { ...logro };
+      if (logroParaGuardar.condicion) {
+        delete logroParaGuardar.condicion;
+        console.log("DEBUG: Condición eliminada de logroParaGuardar");
+      }
       
       // Preparar las actualizaciones
       const actualizaciones = {
         [`logros.${logro.id}`]: {
-          ...logro,
+          ...logroParaGuardar,
           fechaObtenido: timestamp,
           nuevo: true // Marca para mostrar animación
         }
@@ -589,6 +601,50 @@ export class RewardsService {
       
     } catch (error) {
       console.error('Error inicializando sistema de recompensas:', error);
+      throw error;
+    }
+  }
+
+  static async otorgarRecompensaActividad(profileId, actividadId, resultado) {
+    try {
+      const perfilRef = doc(db, 'childProfiles', profileId);
+      const perfilDoc = await getDoc(perfilRef);
+      
+      if (!perfilDoc.exists()) {
+        throw new Error('Perfil no encontrado');
+      }
+      
+      const perfilData = perfilDoc.data();
+      const recompensa = {
+        puntos: 0,
+        estrellas: 0
+      };
+      
+      // Estrellas por completar actividad
+      recompensa.estrellas += 1;
+      
+      // Estrellas por perfección
+      if (resultado.porcentajeCorrecto === 100) {
+        recompensa.estrellas += 1;
+      }
+      
+      // Estrellas por velocidad
+      if (resultado.tiempo < resultado.tiempoObjetivo) {
+        recompensa.estrellas += 1;
+      }
+      
+      // Otorgar recompensas
+      if (recompensa.estrellas > 0) {
+        await this.agregarEstrellas(
+          profileId,
+          recompensa.estrellas,
+          'Completar actividad'
+        );
+      }
+      
+      return recompensa;
+    } catch (error) {
+      console.error('Error otorgando recompensa de actividad:', error);
       throw error;
     }
   }
