@@ -1,5 +1,5 @@
-// src/pages/console/juegos/halliGalli/HalliGalli.js - VERSIÓN CORREGIDA
-import React, { useState, useEffect, useReducer, useCallback } from 'react';
+// src/pages/console/juegos/halliGalli/HalliGalli.js - VERSIÓN DEFINITIVA CORREGIDA
+import React, { useState, useEffect, useReducer, useCallback, useRef } from 'react';
 import { doc, updateDoc, increment } from 'firebase/firestore';
 import { db } from '../../../../config/firebase';
 import { toast } from 'react-toastify';
@@ -34,7 +34,7 @@ const initialGameState = {
   timbrePresionado: false
 };
 
-// Reducer para el estado del juego - CORREGIDO
+// Reducer para el estado del juego
 function gameReducer(state, action) {
   switch (action.type) {
     case GAME_ACTIONS.START_GAME:
@@ -74,7 +74,7 @@ function gameReducer(state, action) {
     case GAME_ACTIONS.UPDATE_SCORE:
       return {
         ...state,
-        puntuacion: Math.max(0, state.puntuacion + action.payload.points) // No permitir puntuación negativa
+        puntuacion: Math.max(0, state.puntuacion + action.payload.points)
       };
     
     case GAME_ACTIONS.RESET_FRUIT_COUNT:
@@ -105,6 +105,10 @@ function HalliGalli({ perfilNino, onScoreUpdate, onClose }) {
   const [frutalInterval, setFrutalInterval] = useState(null);
   const [gameTimer, setGameTimer] = useState(null);
   
+  // 🔥 REF para obtener el estado más actual en callbacks
+  const estadoActualRef = useRef(state);
+  estadoActualRef.current = state;
+  
   // Obtener configuración del nivel según el perfil
   const getNivelConfig = useCallback(() => {
     const nivelPerfil = perfilNino?.resultadosEvaluacion?.nivelAsignado?.nivel || 'básico';
@@ -119,21 +123,26 @@ function HalliGalli({ perfilNino, onScoreUpdate, onClose }) {
   
   const configNivel = getNivelConfig();
   
-  // FUNCIÓN CORREGIDA: Verificar si hay exactamente 5 frutas iguales
-  const verificarCincoFrutasIguales = useCallback((frutasContadas) => {
+  // 🔥 FUNCIÓN CORREGIDA: Verificar si hay 5 O MÁS frutas iguales
+  const verificarCincoOMasFrutasIguales = useCallback((frutasContadas) => {
     console.log('🔍 Verificando frutas:', frutasContadas);
     
-    // Verificar si hay EXACTAMENTE 5 frutas de algún tipo
-    const frutasCon5 = Object.entries(frutasContadas).filter(([id, count]) => count === 5);
+    // ✅ CORREGIDO: Verificar si hay 5 O MÁS frutas de algún tipo
+    const frutasCon5OMas = Object.entries(frutasContadas).filter(([id, count]) => count >= 5);
     
-    console.log('🎯 Frutas con exactamente 5:', frutasCon5);
+    console.log('🎯 Frutas con 5 o más:', frutasCon5OMas);
     
-    return frutasCon5.length > 0;
+    // Devolver información detallada
+    return {
+      hayVictoria: frutasCon5OMas.length > 0,
+      frutasGanadoras: frutasCon5OMas,
+      conteoTotal: Object.values(frutasContadas).reduce((sum, count) => sum + count, 0)
+    };
   }, []);
   
-  // FUNCIÓN CORREGIDA: Finalizar juego con mejor manejo de puntaje
+  // Finalizar juego con mejor manejo de puntaje
   const finalizarJuego = useCallback(async (victoria = false) => {
-    console.log('🏁 Finalizando juego. Victoria:', victoria, 'Puntuación:', state.puntuacion);
+    console.log('🏁 Finalizando juego. Victoria:', victoria, 'Puntuación:', estadoActualRef.current.puntuacion);
     
     // Limpiar intervalos
     if (frutalInterval) {
@@ -149,8 +158,9 @@ function HalliGalli({ perfilNino, onScoreUpdate, onClose }) {
     dispatch({ type: GAME_ACTIONS.END_GAME });
     
     try {
-      const tiempoJugado = configNivel.duracionJuego - (state.tiempoRestante || 0);
-      const puntajeFinal = Math.max(0, state.puntuacion); // Asegurar que no sea negativo
+      const estadoFinal = estadoActualRef.current;
+      const tiempoJugado = configNivel.duracionJuego - (estadoFinal.tiempoRestante || 0);
+      const puntajeFinal = Math.max(0, estadoFinal.puntuacion);
       
       console.log('💾 Guardando estadísticas:', {
         puntajeFinal,
@@ -171,14 +181,14 @@ function HalliGalli({ perfilNino, onScoreUpdate, onClose }) {
         juegosCompletados: increment(1)
       };
 
-      // CORREGIDO: Actualizar puntos totales solo si hay puntuación positiva
+      // Actualizar puntos totales solo si hay puntuación positiva
       if (puntajeFinal > 0) {
         updateData.puntosTotales = increment(puntajeFinal);
       }
 
       await updateDoc(doc(db, 'childProfiles', perfilNino.id), updateData);
       
-      // CORREGIDO: Llamar onScoreUpdate solo si hay puntos y la función existe
+      // Llamar onScoreUpdate si existe y hay puntos
       if (puntajeFinal > 0 && typeof onScoreUpdate === 'function') {
         console.log('📈 Actualizando score global:', puntajeFinal);
         await onScoreUpdate(puntajeFinal);
@@ -203,7 +213,7 @@ function HalliGalli({ perfilNino, onScoreUpdate, onClose }) {
       console.error('❌ Error guardando estadísticas:', error);
       toast.error('Error al guardar las estadísticas');
     }
-  }, [frutalInterval, gameTimer, perfilNino, state.puntuacion, state.tiempoRestante, onScoreUpdate, configNivel]);
+  }, [frutalInterval, gameTimer, perfilNino, onScoreUpdate, configNivel]);
   
   // Generar secuencia de frutas
   const iniciarSecuenciaFrutas = useCallback(() => {
@@ -263,37 +273,32 @@ function HalliGalli({ perfilNino, onScoreUpdate, onClose }) {
     
   }, [configNivel, iniciarSecuenciaFrutas, finalizarJuego]);
   
-  // Detener intervalos al desmontar
-  useEffect(() => {
-    return () => {
-      if (frutalInterval) clearInterval(frutalInterval);
-      if (gameTimer) clearInterval(gameTimer);
-    };
-  }, [frutalInterval, gameTimer]);
-  
-  // FUNCIÓN CORREGIDA: Manejar pulsación del timbre
+  // 🔥 FUNCIÓN CORREGIDA: Manejar pulsación del timbre
   const handleBellPress = useCallback(() => {
-    if (!state.juegoIniciado || state.timbrePresionado || state.juegoTerminado) {
+    // Obtener el estado más actual
+    const estadoActual = estadoActualRef.current;
+    
+    if (!estadoActual.juegoIniciado || estadoActual.timbrePresionado || estadoActual.juegoTerminado) {
       console.log('⏸️ Timbre bloqueado - Estado del juego:', {
-        juegoIniciado: state.juegoIniciado,
-        timbrePresionado: state.timbrePresionado,
-        juegoTerminado: state.juegoTerminado
+        juegoIniciado: estadoActual.juegoIniciado,
+        timbrePresionado: estadoActual.timbrePresionado,
+        juegoTerminado: estadoActual.juegoTerminado
       });
       return;
     }
 
     console.log('🔔 ¡TIMBRE PRESIONADO!');
-    console.log('📊 Estado actual de frutas:', state.frutasActuales);
+    console.log('📊 Estado actual de frutas:', estadoActual.frutasActuales);
     
     dispatch({ type: GAME_ACTIONS.PRESS_BELL });
     
-    // LÓGICA CORREGIDA: Verificar si hay exactamente 5 frutas iguales
-    const hayVictoria = verificarCincoFrutasIguales(state.frutasActuales);
+    // 🔥 LÓGICA CORREGIDA: Verificar si hay 5 O MÁS frutas iguales
+    const resultado = verificarCincoOMasFrutasIguales(estadoActual.frutasActuales);
     
-    console.log('🎯 ¿Hay victoria?', hayVictoria);
+    console.log('🎯 Resultado de verificación:', resultado);
     
-    if (hayVictoria) {
-      // ACIERTO: Sumar puntos
+    if (resultado.hayVictoria) {
+      // ✅ ACIERTO: Sumar puntos
       console.log(`✅ ¡ACIERTO! +${configNivel.puntosPorAcierto} puntos`);
       
       dispatch({
@@ -301,18 +306,22 @@ function HalliGalli({ perfilNino, onScoreUpdate, onClose }) {
         payload: { points: configNivel.puntosPorAcierto }
       });
       
-      toast.success(`🎉 ¡Halli Galli! +${configNivel.puntosPorAcierto} puntos`, {
+      // Mostrar información de las frutas ganadoras
+      const frutasGanadoras = resultado.frutasGanadoras.map(([id, count]) => {
+        const fruta = FRUTAS.find(f => f.id === id);
+        return `${fruta?.imagen || '?'} x${count}`;
+      }).join(', ');
+      
+      toast.success(`🎉 ¡Halli Galli! ${frutasGanadoras} = +${configNivel.puntosPorAcierto} puntos`, {
         position: "top-center",
-        autoClose: 1500
+        autoClose: 2000
       });
       
-      // Resetear conteo después del acierto
-      setTimeout(() => {
-        dispatch({ type: GAME_ACTIONS.RESET_FRUIT_COUNT });
-      }, 500);
+      // 🔥 CORREGIDO: Resetear inmediatamente sin setTimeout
+      dispatch({ type: GAME_ACTIONS.RESET_FRUIT_COUNT });
       
     } else {
-      // ERROR: Restar puntos (pero no dejar que sea negativo)
+      // ❌ ERROR: Restar puntos
       console.log(`❌ ERROR: ${configNivel.penalizacionError} puntos`);
       
       dispatch({
@@ -330,11 +339,19 @@ function HalliGalli({ perfilNino, onScoreUpdate, onClose }) {
     setTimeout(() => {
       dispatch({
         type: GAME_ACTIONS.UPDATE_TIMER,
-        payload: { time: state.tiempoRestante }
+        payload: { time: estadoActualRef.current.tiempoRestante }
       });
     }, 1000);
     
-  }, [state.frutasActuales, state.juegoIniciado, state.timbrePresionado, state.juegoTerminado, state.tiempoRestante, configNivel, verificarCincoFrutasIguales]);
+  }, [configNivel, verificarCincoOMasFrutasIguales]);
+  
+  // Detener intervalos al desmontar
+  useEffect(() => {
+    return () => {
+      if (frutalInterval) clearInterval(frutalInterval);
+      if (gameTimer) clearInterval(gameTimer);
+    };
+  }, [frutalInterval, gameTimer]);
   
   // Debug: Mostrar estado actual en consola
   useEffect(() => {
@@ -344,8 +361,14 @@ function HalliGalli({ perfilNino, onScoreUpdate, onClose }) {
         puntuacion: state.puntuacion,
         tiempo: state.tiempoRestante
       });
+      
+      // 🔥 NUEVO: Detectar automáticamente cuando hay 5+ frutas
+      const resultado = verificarCincoOMasFrutasIguales(state.frutasActuales);
+      if (resultado.hayVictoria) {
+        console.log('🚨 ¡HAY 5+ FRUTAS IGUALES! Presiona el timbre:', resultado.frutasGanadoras);
+      }
     }
-  }, [state.frutasActuales, state.puntuacion, state.tiempoRestante, state.juegoIniciado, state.juegoTerminado]);
+  }, [state.frutasActuales, state.puntuacion, state.tiempoRestante, state.juegoIniciado, state.juegoTerminado, verificarCincoOMasFrutasIguales]);
   
   // Renderizado del componente
   return (
@@ -382,7 +405,7 @@ function HalliGalli({ perfilNino, onScoreUpdate, onClose }) {
           </div>
         </div>
 
-        {/* Panel de Estadísticas */}
+        {/* Panel de Estadísticas MEJORADO */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-6">
           <div className="bg-gradient-to-r from-orange-100 to-orange-200 rounded-lg p-4">
             <div className="text-sm text-orange-700 font-medium">Puntuación</div>
@@ -411,7 +434,9 @@ function HalliGalli({ perfilNino, onScoreUpdate, onClose }) {
                 return fruta ? (
                   <div key={id} className="flex items-center bg-white rounded px-1">
                     <span className="text-lg">{fruta.imagen}</span>
-                    <span className={`text-sm font-bold ml-1 ${count === 5 ? 'text-green-600' : 'text-gray-600'}`}>
+                    <span className={`text-sm font-bold ml-1 ${
+                      count >= 5 ? 'text-green-600 animate-pulse' : count >= 3 ? 'text-yellow-600' : 'text-gray-600'
+                    }`}>
                       {count}
                     </span>
                   </div>
@@ -421,6 +446,27 @@ function HalliGalli({ perfilNino, onScoreUpdate, onClose }) {
           </div>
         </div>
 
+        {/* 🔥 NUEVO: Indicador visual cuando hay 5+ frutas */}
+        {(() => {
+          const resultado = verificarCincoOMasFrutasIguales(state.frutasActuales);
+          return resultado.hayVictoria && state.juegoIniciado ? (
+            <div className="mx-6 mb-4 bg-green-100 border-l-4 border-green-500 p-4 rounded animate-pulse">
+              <div className="flex items-center">
+                <span className="text-2xl mr-2">🚨</span>
+                <div>
+                  <p className="text-green-800 font-bold">¡HAY 5+ FRUTAS IGUALES!</p>
+                  <p className="text-green-700 text-sm">
+                    {resultado.frutasGanadoras.map(([id, count]) => {
+                      const fruta = FRUTAS.find(f => f.id === id);
+                      return `${fruta?.imagen || '?'} x${count}`;
+                    }).join(', ')} - ¡Presiona el timbre!
+                  </p>
+                </div>
+              </div>
+            </div>
+          ) : null;
+        })()}
+
         {/* Área de Juego */}
         {!state.juegoIniciado && !state.juegoTerminado ? (
           <div className="p-12 text-center">
@@ -428,7 +474,7 @@ function HalliGalli({ perfilNino, onScoreUpdate, onClose }) {
               ¡Prepárate para jugar Halli Galli!
             </h3>
             <p className="text-gray-600 mb-6">
-              Presiona el timbre cuando veas exactamente 5 frutas iguales.
+              Presiona el timbre cuando veas 5 o más frutas iguales.
             </p>
             <button
               onClick={() => {
