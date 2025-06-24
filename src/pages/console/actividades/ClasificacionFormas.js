@@ -1,86 +1,86 @@
-// src/pages/console/actividades/ClasificacionFormas.js
-import React, { useState, useEffect, useCallback } from 'react';
-import { toast } from 'react-toastify';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { doc, updateDoc, increment, getDoc } from 'firebase/firestore';
 import { db } from '../../../config/firebase';
-import { RewardsService } from '../../../services/rewardsService';
+import { toast } from 'react-toastify';
+import RewardsService from '../../../services/rewardsService';
+// TutorialModal se define al final del archivo como componente local
 
-// Configuración de formas
+// ✅ CORREGIDO: Configuración usando llaves sin acentos para consistencia
+const NIVELES_CONFIG = {
+  'basico': {
+    formasActivas: ['circulo', 'cuadrado', 'triangulo'],
+    formasPorRonda: 5,
+    totalRondas: 3,
+    tiempoLimite: null, // Sin límite de tiempo
+    puntosBase: 10, // Puntos base según especificación
+    descripcion: "Nivel básico - Arrastra las formas"
+  },
+  'basico-alto': {
+    formasActivas: ['circulo', 'cuadrado', 'triangulo', 'rectangulo'],
+    formasPorRonda: 6,
+    totalRondas: 4,
+    tiempoLimite: 240, // 4 minutos
+    puntosBase: 15, // Puntos incrementados para nivel básico-alto
+    descripcion: "Nivel básico-alto - Más formas y tiempo limitado"
+  },
+  'intermedio': {
+    formasActivas: ['circulo', 'cuadrado', 'triangulo', 'rectangulo', 'pentagono'],
+    formasPorRonda: 8,
+    totalRondas: 5,
+    tiempoLimite: 180, // 3 minutos
+    puntosBase: 20, // Puntos nivel intermedio
+    descripcion: "Nivel intermedio - Mayor desafío"
+  },
+  'avanzado': {
+    formasActivas: ['circulo', 'cuadrado', 'triangulo', 'rectangulo', 'pentagono', 'estrella'],
+    formasPorRonda: 10,
+    totalRondas: 6,
+    tiempoLimite: 120, // 2 minutos
+    puntosBase: 25, // Puntos nivel avanzado
+    descripcion: "Nivel avanzado - Máximo desafío"
+  }
+};
+
+// Definición de formas con SVG
 const FORMAS = [
   {
     id: 'circulo',
     nombre: 'Círculo',
-    emoji: '🔵',
-    color: '#3b82f6',
-    svg: (
-      <circle cx="50" cy="50" r="40" fill="currentColor" />
-    )
+    color: '#FF6B6B',
+    svg: <circle cx="50" cy="50" r="35" fill="currentColor" />
   },
   {
     id: 'cuadrado',
     nombre: 'Cuadrado',
-    emoji: '🟦',
-    color: '#ef4444',
-    svg: (
-      <rect x="10" y="10" width="80" height="80" rx="5" fill="currentColor" />
-    )
+    color: '#4ECDC4',
+    svg: <rect x="15" y="15" width="70" height="70" fill="currentColor" />
   },
   {
     id: 'triangulo',
     nombre: 'Triángulo',
-    emoji: '🔺',
-    color: '#22c55e',
-    svg: (
-      <polygon points="50,10 10,90 90,90" fill="currentColor" />
-    )
+    color: '#45B7D1',
+    svg: <polygon points="50,15 15,85 85,85" fill="currentColor" />
+  },
+  {
+    id: 'rectangulo',
+    nombre: 'Rectángulo',
+    color: '#96CEB4',
+    svg: <rect x="10" y="25" width="80" height="50" fill="currentColor" />
+  },
+  {
+    id: 'pentagono',
+    nombre: 'Pentágono',
+    color: '#FFEAA7',
+    svg: <polygon points="50,15 85,35 72,75 28,75 15,35" fill="currentColor" />
   },
   {
     id: 'estrella',
     nombre: 'Estrella',
-    emoji: '⭐',
-    color: '#f59e0b',
-    svg: (
-      <polygon points="50,5 61,35 95,35 68,57 79,91 50,70 21,91 32,57 5,35 39,35" fill="currentColor" />
-    )
+    color: '#FD79A8',
+    svg: <polygon points="50,5 61,35 95,35 68,57 79,91 50,70 21,91 32,57 5,35 39,35" fill="currentColor" />
   }
 ];
-
-// Configuración de niveles
-const NIVELES_CONFIG = {
-  'básico': {
-    formasActivas: ['circulo', 'cuadrado'],
-    formasPorRonda: 4,
-    totalRondas: 5,
-    tiempoLimite: null,
-    puntosPorAcierto: 15,
-    descripcion: "Clasifica círculos y cuadrados"
-  },
-  'básico-alto': {
-    formasActivas: ['circulo', 'cuadrado', 'triangulo'],
-    formasPorRonda: 6,
-    totalRondas: 6,
-    tiempoLimite: 180, // 3 minutos
-    puntosPorAcierto: 20,
-    descripcion: "Clasifica 3 tipos de formas"
-  },
-  'intermedio': {
-    formasActivas: ['circulo', 'cuadrado', 'triangulo', 'estrella'],
-    formasPorRonda: 8,
-    totalRondas: 7,
-    tiempoLimite: 150, // 2.5 minutos
-    puntosPorAcierto: 25,
-    descripcion: "Clasifica todas las formas"
-  },
-  'avanzado': {
-    formasActivas: ['circulo', 'cuadrado', 'triangulo', 'estrella'],
-    formasPorRonda: 10,
-    totalRondas: 8,
-    tiempoLimite: 120, // 2 minutos
-    puntosPorAcierto: 30,
-    descripcion: "Clasificación rápida y precisa"
-  }
-};
 
 function ClasificacionFormas({ actividad, perfilNino, onComplete, onClose }) {
   const navigate = useNavigate();
@@ -96,18 +96,28 @@ function ClasificacionFormas({ actividad, perfilNino, onComplete, onClose }) {
   const [showTutorial, setShowTutorial] = useState(true);
   const [cargando, setCargando] = useState(false);
   const [feedback, setFeedback] = useState('');
+  const [tiempoInicio, setTiempoInicio] = useState(null);
+  
+  // ✅ CORREGIDO: Mapeo correcto de niveles
+  const nivelActual = (() => {
+    const nivelPerfil = perfilNino?.resultadosEvaluacion?.nivelAsignado?.nivel || 'básico';
+    const NIVEL_MAPPING = {
+      'básico': 'basico',
+      'básico-alto': 'basico-alto',
+      'intermedio': 'intermedio',
+      'avanzado': 'avanzado'
+    };
+    return NIVEL_MAPPING[nivelPerfil] || 'basico';
+  })();
 
-  // Configuración según nivel del niño
-  const nivelActual = perfilNino?.resultadosEvaluacion?.nivelAsignado?.nivel || 'básico';
-  const config = NIVELES_CONFIG[nivelActual] || NIVELES_CONFIG['básico'];
-
-  // Obtener formas activas para este nivel
+  const config = NIVELES_CONFIG[nivelActual];
   const formasActivas = config.formasActivas.map(id => FORMAS.find(f => f.id === id));
 
   // Inicializar juego
   useEffect(() => {
     if (!showTutorial) {
       iniciarNuevaRonda();
+      setTiempoInicio(Date.now());
       if (config.tiempoLimite) {
         setTiempoRestante(config.tiempoLimite);
       }
@@ -121,29 +131,31 @@ function ClasificacionFormas({ actividad, perfilNino, onComplete, onClose }) {
       interval = setInterval(() => {
         setTiempoRestante(tiempo => {
           if (tiempo <= 1) {
-            finalizarJuego('tiempo_agotado');
+            finalizarJuego('Tiempo agotado');
             return 0;
           }
           return tiempo - 1;
         });
       }, 1000);
     }
-    return () => clearInterval(interval);
+    return () => {
+      if (interval) clearInterval(interval);
+    };
   }, [tiempoRestante, juegoTerminado]);
 
-  const generarFormasAleatorias = useCallback(() => {
+  const generarFormasAleatorias = () => {
     const formas = [];
     for (let i = 0; i < config.formasPorRonda; i++) {
       const formaAleatoria = formasActivas[Math.floor(Math.random() * formasActivas.length)];
       formas.push({
         ...formaAleatoria,
         uniqueId: `${formaAleatoria.id}-${i}-${Date.now()}`,
-        posX: Math.random() * 300 + 50,
-        posY: Math.random() * 200 + 50
+        posX: Math.random() * 250 + 'px',
+        posY: Math.random() * 200 + 'px'
       });
     }
     return formas;
-  }, [formasActivas, config.formasPorRonda]);
+  };
 
   const iniciarNuevaRonda = () => {
     const nuevasFormas = generarFormasAleatorias();
@@ -162,41 +174,30 @@ function ClasificacionFormas({ actividad, perfilNino, onComplete, onClose }) {
     e.dataTransfer.dropEffect = 'move';
   };
 
-  const manejarDrop = (e, contenedorId) => {
+  const manejarDrop = (e, tipoContenedor) => {
     e.preventDefault();
     
     if (!formaArrastrada) return;
 
-    const esCorrecta = formaArrastrada.id === contenedorId;
-    
-    if (esCorrecta) {
+    if (formaArrastrada.id === tipoContenedor) {
       // Clasificación correcta
-      const nuevasClasificadas = {
+      const nuevasFormasClasificadas = {
         ...formasClasificadas,
-        [formaArrastrada.uniqueId]: contenedorId
+        [formaArrastrada.uniqueId]: true
       };
-      setFormasClasificadas(nuevasClasificadas);
-      
-      const nuevaPuntuacion = puntuacion + config.puntosPorAcierto;
-      setPuntuacion(nuevaPuntuacion);
-      
-      setFeedback('¡Correcto! +' + config.puntosPorAcierto + ' puntos');
-      toast.success('¡Bien hecho! 🎉');
+      setFormasClasificadas(nuevasFormasClasificadas);
+      setFeedback('¡Excelente! ✨');
+      toast.success('¡Forma clasificada correctamente!');
 
-      // Verificar si se completó la ronda
-      const formasRestantes = formasParaClasificar.filter(
-        forma => !nuevasClasificadas[forma.uniqueId]
-      );
-
-      if (formasRestantes.length === 1) {
-        // Ronda completada
+      // Verificar si completó la ronda
+      if (Object.keys(nuevasFormasClasificadas).length === config.formasPorRonda) {
         setTimeout(() => {
           if (rondaActual >= config.totalRondas) {
-            finalizarJuego('completado');
+            finalizarJuego('Completado');
           } else {
-            setRondaActual(rondaActual + 1);
+            setRondaActual(prev => prev + 1);
             iniciarNuevaRonda();
-            toast.success('¡Ronda completada! Siguiente nivel...');
+            setFeedback('¡Ronda completada! Siguiente nivel...');
           }
         }, 1500);
       }
@@ -210,86 +211,86 @@ function ClasificacionFormas({ actividad, perfilNino, onComplete, onClose }) {
     setTimeout(() => setFeedback(''), 2000);
   };
 
+  // ✅ CORREGIDO: Sistema de puntuación y estrellas mejorado
   const finalizarJuego = async (razon) => {
+    if (juegoTerminado) return;
     setJuegoTerminado(true);
-    let puntosFinales = puntuacion;
+    
     try {
+      // Calcular métricas reales del rendimiento
+      const totalFormasEsperadas = config.totalRondas * config.formasPorRonda;
+      const formasCompletadas = Object.keys(formasClasificadas).length + 
+                                ((rondaActual - 1) * config.formasPorRonda);
+      const porcentajeCorrecto = (formasCompletadas / totalFormasEsperadas) * 100;
+      
+      // Tiempo transcurrido
+      const tiempoTranscurrido = tiempoInicio ? (Date.now() - tiempoInicio) / 1000 : 0;
+      const tiempoObjetivo = config.tiempoLimite || 300; // 5 minutos por defecto si no hay límite
+      
+      // ✅ Puntuación según especificación del sistema
+      let puntosFinales = 0;
+      
+      if (razon === 'Completado') {
+        // Actividad completada exitosamente
+        if (nivelActual === 'avanzado') {
+          puntosFinales = 20; // Nivel difícil = 20 pts
+        } else {
+          puntosFinales = 10; // Completar actividad = 10 pts
+        }
+        
+        // Bonificación por tiempo récord (si completó rápido)
+        if (config.tiempoLimite && tiempoTranscurrido < (tiempoObjetivo * 0.7)) {
+          puntosFinales += 5; // 5 pts adicionales por tiempo récord
+        }
+      } else {
+        // Actividad incompleta - puntos proporcionales mínimos
+        puntosFinales = Math.max(5, Math.floor((config.puntosBase * porcentajeCorrecto) / 100));
+      }
+
+      // Agregar puntos
       await RewardsService.agregarPuntos(
         perfilNino.id,
         puntosFinales,
-        `Clasificación de Formas - ${razon}`
+        `Clasificación de Formas - ${razon} - Nivel: ${nivelActual}`
       );
-      // Otorgar solo 1 estrella
+
+      // ✅ CORREGIDO: Calcular estrellas con métricas reales
       const recompensa = await RewardsService.otorgarRecompensaActividad(
         perfilNino.id,
         actividad.id,
         {
-          porcentajeCorrecto: 50,
-          tiempo: 100,
-          tiempoObjetivo: 0
+          porcentajeCorrecto: Math.round(porcentajeCorrecto),
+          tiempo: Math.round(tiempoTranscurrido),
+          tiempoObjetivo: tiempoObjetivo
         }
       );
-      // Notificar a la IU (si aplica)
+
+      // Actualizar puntuación mostrada
+      setPuntuacion(puntosFinales);
+
+      // Notificar a la IU
       if (onComplete) {
         onComplete({
           puntos: puntosFinales,
           estrellas: recompensa.estrellas,
-          nombreActividad: actividad?.titulo || 'Clasificación de Formas'
+          nombreActividad: actividad?.titulo || 'Clasificación de Formas',
+          porcentajeCompletado: Math.round(porcentajeCorrecto),
+          nivel: nivelActual,
+          tiempoUsado: Math.round(tiempoTranscurrido)
         });
       }
-    } catch (error) {
-      console.error("Error actualizando puntos:", error);
-    }
-  };
 
-  const actualizarPuntosEnFirebase = async (puntosFinales) => {
-    if (!perfilNino?.id || !actividad?.categoria) {
-      return false;
-    }
-    
-    setCargando(true);
-    
-    try {
-      const perfilRef = doc(db, "childProfiles", perfilNino.id);
-      const perfilDoc = await getDoc(perfilRef);
-      
-      if (!perfilDoc.exists()) {
-        return false;
-      }
-      
-      const datosActualizacion = {
-        ultimaActividad: new Date(),
-        actividadesCompletadas: increment(1),
-        puntosTotales: increment(puntosFinales)
-      };
-      
-      // Actualizar estadísticas de la categoría
-      const categoria = actividad.categoria;
-      if (perfilDoc.data().estadisticasActividades?.[categoria]) {
-        datosActualizacion[`estadisticasActividades.${categoria}.completadas`] = increment(1);
-        datosActualizacion[`estadisticasActividades.${categoria}.puntuacion`] = increment(puntosFinales);
-      }
-      
-      await updateDoc(perfilRef, datosActualizacion);
-      
-      // Intentar desbloquear logros
-      try {
-        await RewardsService.verificarLogros(perfilNino.id, {
-          tipo: 'actividad_completada',
-          categoria,
-          puntuacion: puntosFinales,
-          formasClasificadas: Object.keys(formasClasificadas).length
-        });
-      } catch (error) {
-        console.log('Error verificando logros:', error);
-      }
-      
-      return true;
+      console.log('✅ Clasificación de Formas completada:', {
+        puntos: puntosFinales,
+        estrellas: recompensa.estrellas,
+        porcentaje: porcentajeCorrecto,
+        nivel: nivelActual,
+        tiempo: tiempoTranscurrido
+      });
+
     } catch (error) {
-      console.error("Error actualizando puntos:", error);
-      return false;
-    } finally {
-      setCargando(false);
+      console.error('Error finalizando actividad:', error);
+      toast.error('Error al guardar el progreso');
     }
   };
 
@@ -306,9 +307,9 @@ function ClasificacionFormas({ actividad, perfilNino, onComplete, onClose }) {
         instrucciones={[
           "Arrastra cada forma a su contenedor correspondiente",
           `Clasifica ${config.formasPorRonda} formas por ronda`,
-          `Completa ${config.totalRondas} rondas`,
+          `Completa ${config.totalRondas} rondas para ganar`,
           config.tiempoLimite ? `Tienes ${formatearTiempo(config.tiempoLimite)} para completar` : "No hay límite de tiempo",
-          "Ganarás puntos por cada forma clasificada correctamente"
+          `Ganarás ${config.puntosBase} puntos base por completar + bonificaciones`
         ]}
         onStart={() => setShowTutorial(false)}
         onClose={onClose}
@@ -317,6 +318,11 @@ function ClasificacionFormas({ actividad, perfilNino, onComplete, onClose }) {
   }
 
   if (juegoTerminado) {
+    const totalFormasEsperadas = config.totalRondas * config.formasPorRonda;
+    const formasCompletadas = Object.keys(formasClasificadas).length + 
+                              ((rondaActual - 1) * config.formasPorRonda);
+    const porcentajeLogrado = Math.round((formasCompletadas / totalFormasEsperadas) * 100);
+    
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 to-purple-50 flex items-center justify-center p-4">
         <div className="bg-white rounded-2xl shadow-xl p-8 max-w-md w-full text-center">
@@ -327,9 +333,11 @@ function ClasificacionFormas({ actividad, perfilNino, onComplete, onClose }) {
             {rondaActual >= config.totalRondas ? '¡Felicitaciones!' : '¡Buen Intento!'}
           </h2>
           <div className="space-y-2 text-gray-600 mb-6">
-            <p>Formas clasificadas: {Object.keys(formasClasificadas).length}</p>
+            <p>Formas clasificadas: {formasCompletadas}/{totalFormasEsperadas}</p>
             <p>Rondas completadas: {rondaActual}/{config.totalRondas}</p>
+            <p>Progreso: {porcentajeLogrado}%</p>
             <p>Puntos obtenidos: {puntuacion}</p>
+            <p>Nivel: {config.descripcion}</p>
           </div>
           <button
             onClick={onClose}
@@ -356,6 +364,7 @@ function ClasificacionFormas({ actividad, perfilNino, onComplete, onClose }) {
               ✕
             </button>
             <h1 className="text-xl font-bold text-gray-800">Clasificación de Formas</h1>
+            <span className="text-sm bg-gray-100 px-2 py-1 rounded">{config.descripcion}</span>
           </div>
           
           <div className="flex items-center space-x-6">
@@ -367,14 +376,17 @@ function ClasificacionFormas({ actividad, perfilNino, onComplete, onClose }) {
             </div>
             
             <div className="text-center">
-              <div className="text-sm text-gray-500">Puntos</div>
-              <div className="text-lg font-bold text-green-600">{puntuacion}</div>
+              <div className="text-sm text-gray-500">Clasificadas</div>
+              <div className="text-lg font-bold text-green-600">
+                {Object.keys(formasClasificadas).length}/{config.formasPorRonda}
+              </div>
             </div>
             
             {tiempoRestante !== null && (
               <div className="text-center">
                 <div className="text-sm text-gray-500">Tiempo</div>
-                <div className={`text-lg font-bold ${tiempoRestante < 30 ? 'text-red-600' : 'text-gray-800'}`}>
+                <div className={`text-lg font-bold ${tiempoRestante < 30 ? 
+                  'text-red-600' : 'text-gray-800'}`}>
                   {formatearTiempo(tiempoRestante)}
                 </div>
               </div>
@@ -434,18 +446,18 @@ function ClasificacionFormas({ actividad, perfilNino, onComplete, onClose }) {
                 onDragOver={manejarDragOver}
                 onDrop={(e) => manejarDrop(e, forma.id)}
                 className="border-4 border-dashed border-gray-300 rounded-lg p-6 min-h-20 flex items-center justify-center hover:border-blue-400 transition-colors"
-                style={{ borderColor: formaArrastrada?.id === forma.id ? forma.color : undefined }}
+                style={{ 
+                  borderColor: formaArrastrada?.id === forma.id ? forma.color : undefined,
+                  backgroundColor: formaArrastrada?.id === forma.id ? `${forma.color}15` : undefined
+                }}
               >
-                <div className="flex items-center space-x-4">
-                  <div style={{ color: forma.color }}>
-                    <svg width="40" height="40" viewBox="0 0 100 100">
-                      {forma.svg}
-                    </svg>
-                  </div>
-                  <span className="font-semibold text-gray-700">
+                <div className="flex items-center space-x-3">
+                  <svg width="40" height="40" viewBox="0 0 100 100" style={{ color: forma.color }}>
+                    {forma.svg}
+                  </svg>
+                  <span className="text-lg font-semibold text-gray-700">
                     {forma.nombre}
                   </span>
-                  <span className="text-2xl">{forma.emoji}</span>
                 </div>
               </div>
             ))}
@@ -456,7 +468,7 @@ function ClasificacionFormas({ actividad, perfilNino, onComplete, onClose }) {
   );
 }
 
-// Componente Tutorial
+// Componente Tutorial Local
 function TutorialModal({ titulo, instrucciones, onStart, onClose }) {
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">

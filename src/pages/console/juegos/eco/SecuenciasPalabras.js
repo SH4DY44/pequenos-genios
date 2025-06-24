@@ -1,3 +1,4 @@
+// src/pages/console/juegos/eco/SecuenciasPalabras.js - VERSIÓN CORREGIDA
 import React, { useState, useEffect, useCallback, useMemo, useReducer } from 'react';
 import { doc, updateDoc, increment } from 'firebase/firestore';
 import { db } from '../../../../config/firebase';
@@ -7,8 +8,7 @@ import GameOverModal from './GameOverModal';
 import { NIVELES_CONFIG, CATEGORIAS, SONIDOS, ANIMACIONES } from './palabras';
 import { NotificationService } from '../../../../services/notificationService';
 import { auth } from '../../../../config/firebase';
-import { RewardsService } from '../../../../services/rewardsService';
-
+import RewardsService from '../../../../services/rewardsService';
 
 // Acciones del juego
 const GAME_ACTIONS = {
@@ -38,6 +38,7 @@ const initialState = {
   juegoActivo: false,
   juegoTerminado: false,
   secuenciaCompletada: 0,
+  secuenciasCorrectas: 0, // ✅ AGREGADO: Contador de secuencias correctas
   mostrandoSecuencia: false,
   seleccionandoSecuencia: false
 };
@@ -98,6 +99,7 @@ function gameReducer(state, action) {
         comboActual: state.comboActual + 1,
         maxCombo: Math.max(state.maxCombo, state.comboActual + 1),
         secuenciaCompletada: state.secuenciaCompletada + 1,
+        secuenciasCorrectas: state.secuenciasCorrectas + 1, // ✅ AGREGADO
         mostrandoSecuencia: false,
         seleccionandoSecuencia: false,
         tiempoRestante: null
@@ -134,10 +136,11 @@ function gameReducer(state, action) {
 function SecuenciasPalabras({ perfilNino, onScoreUpdate, onClose }) {
   const [state, dispatch] = useReducer(gameReducer, initialState);
   const [showTutorial, setShowTutorial] = useState(true);
+  const [tiempoInicio, setTiempoInicio] = useState(null); // ✅ AGREGADO: Para medir tiempo total
 
   // Obtener configuración del nivel
   const configNivel = useMemo(() => {
-    const nivelPerfil = perfilNino?.resultadosEvaluacion?.nivelAsignado?.nivel || 'basico';
+    const nivelPerfil = perfilNino?.resultadosEvaluacion?.nivelAsignado?.nivel || 'básico';
     const NIVEL_MAPPING = {
       'básico': 'basico',
       'básico-alto': 'básico-alto',
@@ -154,6 +157,156 @@ function SecuenciasPalabras({ perfilNino, onScoreUpdate, onClose }) {
     audio.volume = 0.3;
     audio.play().catch(() => {});
   }, []);
+
+  // ✅ CORREGIDO: Sistema de finalización con puntuación estándar
+  const manejarFinJuego = async (estadoFinal) => {
+    try {
+      // Calcular métricas reales del rendimiento
+      const totalSecuenciasEsperadas = configNivel.numSecuencias;
+      const secuenciasCompletadas = estadoFinal.secuenciasCorrectas || 0;
+      const porcentajeCorrecto = (secuenciasCompletadas / totalSecuenciasEsperadas) * 100;
+      
+      // Tiempo transcurrido
+      const tiempoTranscurrido = tiempoInicio ? (Date.now() - tiempoInicio) / 1000 : 0;
+      
+      // Calcular tiempo objetivo basado en configuración del nivel
+      const tiempoObjetivo = configNivel.numSecuencias * (
+        (configNivel.tiempoVisualizacion * configNivel.numElementos / 1000) + 
+        (configNivel.tiempoMemorizar || 30)
+      );
+      
+      // ✅ Puntuación según especificación del sistema
+      const nivelActual = perfilNino?.resultadosEvaluacion?.nivelAsignado?.nivel || 'básico';
+      const NIVEL_MAPPING = {
+        'básico': 'basico',
+        'básico-alto': 'basico-alto',
+        'intermedio': 'intermedio',
+        'avanzado': 'avanzado'
+      };
+      const nivelMapeado = NIVEL_MAPPING[nivelActual] || 'basico';
+      
+      let puntosFinales = 0;
+      
+      if (secuenciasCompletadas >= (totalSecuenciasEsperadas * 0.6)) {
+        // Juego completado exitosamente (60% o más)
+        if (nivelMapeado === 'avanzado') {
+          puntosFinales = 20; // Nivel difícil = 20 pts
+        } else {
+          puntosFinales = 10; // Completar juego = 10 pts
+        }
+        
+        // Bonificación por tiempo récord (si completó rápido)
+        if (tiempoTranscurrido < (tiempoObjetivo * 0.7)) {
+          puntosFinales += 5; // 5 pts adicionales por tiempo récord
+        }
+      } else {
+        // Juego incompleto - puntos proporcionales mínimos
+        puntosFinales = Math.max(5, Math.floor((configNivel.puntosBase * porcentajeCorrecto) / 100));
+      }
+
+      // Agregar puntos
+      await RewardsService.agregarPuntos(
+        perfilNino.id,
+        puntosFinales,
+        `ECO completado - Nivel: ${nivelActual} - Secuencias: ${secuenciasCompletadas}/${totalSecuenciasEsperadas}`
+      );
+
+      // ✅ CORREGIDO: Calcular estrellas con métricas reales
+      const recompensa = await RewardsService.otorgarRecompensaActividad(
+        perfilNino.id,
+        'eco',
+        {
+          porcentajeCorrecto: Math.round(porcentajeCorrecto),
+          tiempo: Math.round(tiempoTranscurrido),
+          tiempoObjetivo: Math.round(tiempoObjetivo)
+        }
+      );
+
+      // Actualizar estadísticas del juego
+      await updateDoc(doc(db, 'childProfiles', perfilNino.id), {
+        juegosCompletados: increment(1),
+        [`estadisticasJuegos.secuenciasPalabras.partidasJugadas`]: increment(1),
+        [`estadisticasJuegos.secuenciasPalabras.${secuenciasCompletadas >= totalSecuenciasEsperadas ? 'victorias' : 'derrotas'}`]: increment(1),
+        [`estadisticasJuegos.secuenciasPalabras.maxPuntuacion`]: Math.max(
+          (perfilNino?.estadisticasJuegos?.secuenciasPalabras?.maxPuntuacion || 0), 
+          puntosFinales
+        ),
+        actividadesCompletadas: increment(1)
+      });
+
+      // Notificación persistente
+      if (auth.currentUser) {
+        await NotificationService.crearNotificacion({
+          tutorId: auth.currentUser.uid,
+          profileId: perfilNino.id,
+          tipo: 'logro_alcanzado',
+          titulo: 'ECO: Juego terminado',
+          mensaje: `Puntuación final: ${puntosFinales} puntos`,
+          datos: { 
+            puntos: puntosFinales, 
+            estrellas: recompensa.estrellas,
+            secuenciasCompletadas,
+            porcentaje: Math.round(porcentajeCorrecto)
+          },
+          prioridad: secuenciasCompletadas >= totalSecuenciasEsperadas ? 'alta' : 'normal'
+        });
+      }
+
+      // Notificar a la IU
+      if (onScoreUpdate) {
+        onScoreUpdate({
+          puntos: puntosFinales,
+          estrellas: recompensa.estrellas,
+          nombreJuego: 'ECO - Secuencias de Palabras',
+          tipoJuego: 'eco',
+          nivel: nivelActual,
+          secuenciasCompletadas: secuenciasCompletadas,
+          totalSecuencias: totalSecuenciasEsperadas,
+          combo: estadoFinal.maxCombo,
+          porcentajeCompletado: Math.round(porcentajeCorrecto),
+          tiempoUsado: Math.round(tiempoTranscurrido),
+          perfecto: secuenciasCompletadas === totalSecuenciasEsperadas
+        });
+      }
+
+      // Actualizar el estado del juego
+      dispatch({ 
+        type: GAME_ACTIONS.END_GAME, 
+        payload: { 
+          ...estadoFinal, 
+          puntuacionFinal: puntosFinales,
+          estrellas: recompensa.estrellas
+        } 
+      });
+
+      console.log('✅ ECO completado:', {
+        puntos: puntosFinales,
+        estrellas: recompensa.estrellas,
+        porcentaje: porcentajeCorrecto,
+        nivel: nivelActual,
+        secuenciasCompletadas: secuenciasCompletadas,
+        tiempo: tiempoTranscurrido
+      });
+
+      toast.success(`¡Juego terminado! Puntuación final: ${puntosFinales} puntos`);
+
+    } catch (error) {
+      console.error('Error finalizando juego ECO:', error);
+      toast.error('Error al guardar el progreso');
+    }
+  };
+
+  // ✅ CORREGIDO: Finalizar juego con estado actual
+  const finalizarJuego = async (victoria = false) => {
+    await manejarFinJuego({
+      ...state,
+      victoria,
+      secuenciaCompletada: state.secuenciaCompletada,
+      secuenciasCorrectas: state.secuenciasCorrectas,
+      maxCombo: state.maxCombo,
+      puntuacion: state.puntuacion
+    });
+  };
 
   // Función para generar nueva secuencia
   const generarSecuencia = useCallback(() => {
@@ -229,7 +382,7 @@ function SecuenciasPalabras({ perfilNino, onScoreUpdate, onClose }) {
     const multiplicador = Math.min(configNivel.maxCombo, state.comboActual);
     const puntosGanados = Math.floor(puntosPorAcierto * multiplicador);
   
-    // Primero actualizamos el contador de secuencias
+    // Actualizar contador de secuencias
     const nuevaSecuenciaCompletada = state.secuenciaCompletada + 1;
   
     dispatch({
@@ -240,16 +393,12 @@ function SecuenciasPalabras({ perfilNino, onScoreUpdate, onClose }) {
       }
     });
   
-    if (onScoreUpdate) {
-      await onScoreUpdate(puntosGanados);
-    }
-  
     if (state.comboActual > 1) {
       playSound('combo');
       toast.success(`¡${state.comboActual}x Combo! +${puntosGanados} puntos`);
     }
   
-    // Comparamos con el número exacto de secuencias
+    // Verificar si se completó el juego
     if (nuevaSecuenciaCompletada === configNivel.numSecuencias) {
       playSound('nivelCompletado');
       await finalizarJuego(true);
@@ -274,6 +423,7 @@ function SecuenciasPalabras({ perfilNino, onScoreUpdate, onClose }) {
 
   // Iniciar juego
   const iniciarJuego = useCallback(() => {
+    setTiempoInicio(Date.now()); // ✅ AGREGADO: Iniciar medición de tiempo
     dispatch({
       type: GAME_ACTIONS.INIT_GAME,
       payload: { intentosMaximos: configNivel.intentosMaximos }
@@ -281,94 +431,8 @@ function SecuenciasPalabras({ perfilNino, onScoreUpdate, onClose }) {
     generarSecuencia();
   }, [configNivel, generarSecuencia]);
 
-  // Finalizar juego
-  const finalizarJuego = async (victoria = false) => {
-    try {
-      await updateDoc(doc(db, 'childProfiles', perfilNino.id), {
-        juegosCompletados: increment(1)
-      });
-      await updateDoc(doc(db, 'childProfiles', perfilNino.id), {
-        [`estadisticasJuegos.secuenciasPalabras.partidasJugadas`]: increment(1),
-        [`estadisticasJuegos.secuenciasPalabras.${victoria ? 'victorias' : 'derrotas'}`]: increment(1),
-        [`estadisticasJuegos.secuenciasPalabras.maxPuntuacion`]: Math.max((perfilNino?.estadisticasJuegos?.secuenciasPalabras?.maxPuntuacion || 0), state.puntuacion),
-        actividadesCompletadas: increment(1)
-      });
-      // Notificación persistente
-      if (auth.currentUser) {
-        await NotificationService.crearNotificacion({
-          tutorId: auth.currentUser.uid,
-          profileId: perfilNino.id,
-          tipo: 'logro_alcanzado',
-          titulo: 'Secuencias de Palabras: Juego terminado',
-          mensaje: `Puntuación final: ${state.puntuacion}`,
-          datos: { puntos: state.puntuacion, victoria },
-          prioridad: victoria ? 'alta' : 'normal'
-        });
-      }
-      dispatch({ type: GAME_ACTIONS.END_GAME });
-      toast.success(`¡Juego terminado! Puntuación final: ${state.puntuacion}`);
-    } catch (error) {
-      console.error('Error guardando estadísticas:', error);
-      toast.error('Error al guardar las estadísticas');
-    }
-  };
-
-  const manejarFinJuego = async (estadoFinal) => {
-    try {
-      const nivel = perfilNino?.resultadosEvaluacion?.nivelAsignado?.nivel || 'basico';
-      const config = NIVELES_CONFIG[nivel];
-      // Usar la puntuación en pantalla como fuente de verdad
-      let puntosFinales = state.puntuacion;
-      let bonificaciones = [];
-      // Bonificaciones especiales (si se muestran en tiempo real, ya están sumadas)
-      // Otorgar puntos
-      await RewardsService.agregarPuntos(
-        perfilNino.id,
-        puntosFinales,
-        `ECO completado - Nivel: ${nivel} - Secuencias: ${estadoFinal.secuenciaCompletada}`
-      );
-      // Otorgar estrellas
-      const recompensa = await RewardsService.otorgarRecompensaActividad(
-        perfilNino.id,
-        'eco',
-        {
-          porcentajeCorrecto: 0, // Puedes calcular si es relevante
-          tiempo: 0,
-          tiempoObjetivo: 0
-        }
-      );
-      // Notificar a la IU
-      if (onScoreUpdate) {
-        onScoreUpdate({
-          puntos: puntosFinales,
-          estrellas: recompensa.estrellas,
-          bonificaciones,
-          nombreJuego: 'ECO - Secuencias de Palabras',
-          tipoJuego: 'eco',
-          nivel,
-          secuenciasCompletadas: estadoFinal.secuenciaCompletada,
-          combo: estadoFinal.maxCombo,
-          perfecto: false // Puedes ajustar si tienes lógica de perfección
-        });
-      }
-      // Actualizar el estado del juego
-      dispatch({ 
-        type: GAME_ACTIONS.END_GAME, 
-        payload: { 
-          ...estadoFinal, 
-          puntuacionFinal: puntosFinales,
-          bonificaciones 
-        } 
-      });
-
-    } catch (error) {
-      console.error('Error finalizando juego ECO:', error);
-      toast.error('Error al guardar el progreso');
-    }
-  };
-
+  // Timer del juego
   useEffect(() => {
-
     if (!state.tiempoRestante) return;
     
     const timer = setInterval(() => {
@@ -394,167 +458,184 @@ function SecuenciasPalabras({ perfilNino, onScoreUpdate, onClose }) {
     }, 1000);
   
     return () => clearInterval(timer);
-  }, [state.tiempoRestante]);
+  }, [state.tiempoRestante, configNivel.tiempoMemorizar]);
 
+  // Obtener opciones de palabras disponibles
+  const getOpcionesPalabras = () => {
+    const categoriasDisponibles = configNivel.categorias;
+    return categoriasDisponibles.flatMap(categoria => 
+      CATEGORIAS[categoria] ? CATEGORIAS[categoria] : []
+    );
+  };
 
-  // 11. Renderizado
+  if (showTutorial) {
+    return (
+      <TutorialModal
+        isOpen={showTutorial}
+        onClose={() => {
+          setShowTutorial(false);
+          iniciarJuego();
+        }}
+        configNivel={configNivel}
+      />
+    );
+  }
+
+  if (state.juegoTerminado) {
+    return (
+      <GameOverModal
+        isOpen={true}
+        onClose={onClose}
+        onRestart={iniciarJuego}
+        estado={state}
+        configNivel={configNivel}
+      />
+    );
+  }
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-purple-50 p-6">
-      <div className="max-w-7xl mx-auto bg-white rounded-xl shadow-lg">
-        {/* Header */}
-        <div className="border-b border-blue-200 p-6">
-          <div className="flex justify-between items-start">
-            <div>
-              <h2 className="text-3xl font-bold text-[var(--primary-blue)]">
-                Secuencias de Palabras
-              </h2>
-              <p className="text-indigo-600 mt-1 font-medium">
-                {configNivel.descripcion}
-              </p>
-            </div>
-            <div className="flex items-center space-x-4">
-              <button
-                onClick={() => setShowTutorial(true)}
-                className="px-4 py-2 bg-yellow-100 text-yellow-800 rounded-lg 
-                        hover:bg-yellow-200 transition-all flex items-center gap-2"
-              >
-                <span>❔</span>
-                <span>Cómo jugar</span>
-              </button>
-              <button
-                onClick={onClose}
-                className="text-gray-500 hover:text-gray-700 p-2 rounded-full
-                        hover:bg-gray-100 transition-all"
-              >
-                ✕
-              </button>
-            </div>
+    <div className="min-h-screen bg-gradient-to-br from-green-50 to-blue-50 p-4">
+      {/* Header del juego */}
+      <div className="bg-white rounded-xl shadow-lg p-4 mb-6">
+        <div className="flex justify-between items-center">
+          <div className="flex items-center space-x-4">
+            <button
+              onClick={onClose}
+              className="text-gray-500 hover:text-gray-700 text-xl"
+            >
+              ✕
+            </button>
+            <h1 className="text-xl font-bold text-gray-800">ECO - Secuencias de Palabras</h1>
+            <span className="text-sm bg-gray-100 px-2 py-1 rounded">{configNivel.descripcion}</span>
           </div>
-        </div>
-  
-        {/* Panel de Estadísticas */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 p-6">
-          <div className="bg-gradient-to-r from-blue-100 to-blue-200 rounded-lg p-4">
-            <div className="text-sm text-blue-700 font-medium">Puntuación</div>
-            <div className="text-2xl font-bold text-blue-800">{state.puntuacion} pts</div>
-          </div>
-  
-          <div className="bg-gradient-to-r from-purple-100 to-purple-200 rounded-lg p-4">
-            <div className="text-sm text-purple-700 font-medium">
-              Secuencia {state.secuenciaCompletada+1} / {configNivel.numSecuencias+1}
-            </div>
-            <div className="w-full bg-purple-200 rounded-full h-2.5 mt-2">
-              <div 
-                className="bg-purple-600 h-2.5 rounded-full transition-all"
-                style={{ width: `${(state.secuenciaCompletada / configNivel.numSecuencias) * 100}%` }}
-              ></div>
-            </div>
-          </div>
-  
-          {state.comboActual > 1 && (
-            <div className="bg-gradient-to-r from-green-100 to-green-200 rounded-lg p-4 animate-pulse">
-              <div className="text-sm text-green-700 font-medium">Combo</div>
-              <div className="text-2xl font-bold text-green-800">x{state.comboActual}</div>
-            </div>
-          )}
-  
-          <div className="bg-gradient-to-r from-red-100 to-red-200 rounded-lg p-4">
-            <div className="text-sm text-red-700 font-medium">Vidas</div>
-            <div className="flex items-center space-x-2">
-              {Array(state.intentosRestantes).fill('❤️').map((heart, index) => (
-                <span key={index} className="text-2xl">{heart}</span>
-              ))}
-            </div>
-          </div>
-        </div>
-  
-        {/* Timer */}
-        {state.tiempoRestante !== null && (
-          <div className="px-6 mb-4">
-            <div className="bg-gradient-to-r from-yellow-100 to-orange-100 rounded-lg p-4">
-              <div className="text-sm text-yellow-700 font-medium">Tiempo Restante</div>
-              <div className="text-2xl font-bold text-yellow-800">{state.tiempoRestante}s</div>
-            </div>
-          </div>
-        )}
-  
-        {/* Área de Juego */}
-        <div className="p-6">
-          <div className="bg-gray-50 rounded-lg p-6 shadow-inner">
-            {state.mostrando ? (
-              <div className="flex flex-wrap justify-center gap-6">
-                {state.secuenciaActual.map((palabra, index) => (
-                  <div
-                    key={index}
-                    className="w-28 h-28 flex flex-col items-center justify-center 
-                             bg-white rounded-xl shadow-md transform transition-all duration-300
-                             animate-bounce"
-                    style={{ animationDelay: `${index * 200}ms` }}
-                  >
-                    <div className="text-4xl mb-2">{palabra.imagen}</div>
-                    <div className="text-sm font-medium">{palabra.palabra}</div>
-                  </div>
-                ))}
+          
+          <div className="flex items-center space-x-6">
+            <div className="text-center">
+              <div className="text-sm text-gray-500">Secuencia</div>
+              <div className="text-lg font-bold text-blue-600">
+                {state.secuenciaCompletada + 1}/{configNivel.numSecuencias}
               </div>
-            ) : (
-              <div className="space-y-8">
-                {configNivel.categorias.map(categoria => (
-                  <div key={categoria}>
-                    <h3 className="text-lg font-semibold mb-4 text-gray-700 capitalize">
-                      {categoria}
-                    </h3>
-                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
-                      {CATEGORIAS[categoria].map(palabra => (
-                        <button
-                          key={palabra.id}
-                          onClick={() => handleWordSelection(palabra)}
-                          disabled={state.mostrando || state.juegoTerminado}
-                          className={`
-                            aspect-square flex flex-col items-center justify-center 
-                            bg-white rounded-xl border-2 p-4
-                            ${state.secuenciaUsuario.includes(palabra) ? 'border-green-400' : 'border-gray-200'}
-                            ${!state.mostrando && !state.juegoTerminado ? 'hover:border-blue-400 hover:shadow-lg' : ''}
-                            transition-all duration-300
-                            disabled:opacity-50 disabled:cursor-not-allowed
-                          `}
-                        >
-                          <div className="text-4xl mb-2">{palabra.imagen}</div>
-                          <div className="text-sm font-medium">{palabra.palabra}</div>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                ))}
+            </div>
+            
+            <div className="text-center">
+              <div className="text-sm text-gray-500">Correctas</div>
+              <div className="text-lg font-bold text-green-600">
+                {state.secuenciasCorrectas}
+              </div>
+            </div>
+            
+            <div className="text-center">
+              <div className="text-sm text-gray-500">Combo</div>
+              <div className="text-lg font-bold text-purple-600">
+                {state.comboActual}x
+              </div>
+            </div>
+            
+            <div className="text-center">
+              <div className="text-sm text-gray-500">Puntos</div>
+              <div className="text-lg font-bold text-yellow-600">
+                {state.puntuacion}
+              </div>
+            </div>
+            
+            {state.tiempoRestante !== null && (
+              <div className="text-center">
+                <div className="text-sm text-gray-500">Tiempo</div>
+                <div className={`text-lg font-bold ${state.tiempoRestante < 10 ? 
+                  'text-red-600' : 'text-gray-800'}`}>
+                  {state.tiempoRestante}s
+                </div>
               </div>
             )}
           </div>
         </div>
-  
-        {/* Modales */}
-        <TutorialModal 
-          isOpen={showTutorial} 
-          onClose={() => {
-            setShowTutorial(false);
-            if (!state.juegoActivo) {
-              iniciarJuego();
-            }
-          }}
-          configNivel={configNivel}
-        />
-  
-        <GameOverModal 
-          isOpen={state.juegoTerminado}
-          victoria={state.secuenciaCompletada === configNivel.numSecuencias}
-          puntuacion={state.puntuacion}
-          maxCombo={state.maxCombo}
-          onRestart={() => {
-            iniciarJuego();
-          }}
-          onClose={onClose}
-        />
+        
+        {/* Barra de progreso */}
+        <div className="mt-4">
+          <div className="w-full h-2 bg-gray-200 rounded-full">
+            <div
+              className="h-full bg-green-500 rounded-full transition-all"
+              style={{ width: `${(state.secuenciaCompletada / configNivel.numSecuencias) * 100}%` }}
+            ></div>
+          </div>
+        </div>
+      </div>
+
+      {/* Área del juego */}
+      <div className="bg-white rounded-xl shadow-lg p-6">
+        {/* Área de secuencia */}
+        {state.mostrandoSecuencia && (
+          <div className="text-center mb-8">
+            <h3 className="text-xl font-bold mb-4">Memoriza esta secuencia:</h3>
+            <div className="flex justify-center space-x-4">
+              {state.secuenciaActual.map((palabra, index) => (
+                <div
+                  key={`${palabra.id}-${index}`}
+                  className="bg-blue-100 p-4 rounded-lg text-center"
+                >
+                  <div className="text-3xl mb-2">{palabra.imagen}</div>
+                  <div className="font-medium">{palabra.palabra}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Área de selección */}
+        {state.seleccionandoSecuencia && (
+          <div className="text-center">
+            <h3 className="text-xl font-bold mb-4">
+              Repite la secuencia ({state.secuenciaUsuario.length + 1}/{state.secuenciaActual.length}):
+            </h3>
+            
+            {/* Secuencia del usuario */}
+            <div className="flex justify-center space-x-2 mb-6">
+              {state.secuenciaUsuario.map((palabra, index) => (
+                <div
+                  key={`selected-${index}`}
+                  className="bg-green-100 p-2 rounded-lg text-center"
+                >
+                  <div className="text-2xl">{palabra.imagen}</div>
+                </div>
+              ))}
+              {Array.from({ length: state.secuenciaActual.length - state.secuenciaUsuario.length }).map((_, index) => (
+                <div
+                  key={`empty-${index}`}
+                  className="bg-gray-100 p-2 rounded-lg w-16 h-16 flex items-center justify-center"
+                >
+                  <span className="text-gray-400">?</span>
+                </div>
+              ))}
+            </div>
+
+            {/* Opciones disponibles */}
+            <div className="grid grid-cols-4 md:grid-cols-6 gap-3">
+              {getOpcionesPalabras().map((palabra) => (
+                <button
+                  key={palabra.id}
+                  onClick={() => handleWordSelection(palabra)}
+                  className="bg-gray-100 hover:bg-gray-200 p-3 rounded-lg transition-colors text-center"
+                >
+                  <div className="text-2xl mb-1">{palabra.imagen}</div>
+                  <div className="text-xs">{palabra.palabra}</div>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Estado de espera */}
+        {!state.mostrandoSecuencia && !state.seleccionandoSecuencia && state.juegoActivo && (
+          <div className="text-center py-12">
+            <div className="text-4xl mb-4">🎯</div>
+            <h3 className="text-xl font-bold text-gray-700">
+              Preparando siguiente secuencia...
+            </h3>
+          </div>
+        )}
       </div>
     </div>
   );
-};
+}
 
 export default SecuenciasPalabras;
