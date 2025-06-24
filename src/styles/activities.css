@@ -1,0 +1,253 @@
+@keyframes float {
+    0%, 100% { transform: translateY(0px); }
+    50% { transform: translateY(-10px); }
+  }
+  
+  @keyframes pulse-soft {
+    0%, 100% { opacity: 0.8; }
+    50% { opacity: 1; }
+  }
+  
+  @keyframes bounce-in {
+    0% { transform: scale(0.3); opacity: 0; }
+    50% { transform: scale(1.05); }
+    70% { transform: scale(0.9); }
+    100% { transform: scale(1); opacity: 1; }
+  }
+  
+  @keyframes slide-in-left {
+    0% { transform: translateX(-100%); opacity: 0; }
+    100% { transform: translateX(0); opacity: 1; }
+  }
+  
+  @keyframes slide-in-right {
+    0% { transform: translateX(100%); opacity: 0; }
+    100% { transform: translateX(0); opacity: 1; }
+  }
+  
+  @keyframes glow {
+    0%, 100% { box-shadow: 0 0 5px rgba(59, 130, 246, 0.5); }
+    50% { box-shadow: 0 0 20px rgba(59, 130, 246, 0.8); }
+  }
+  
+  /* Clases para actividades */
+  .activity-card {
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    position: relative;
+    overflow: hidden;
+  }
+  
+  .activity-card::before {
+    content: '';
+    position: absolute;
+    top: -50%;
+    left: -50%;
+    width: 200%;
+    height: 200%;
+    background: linear-gradient(45deg, transparent, rgba(255, 255, 255, 0.1), transparent);
+    transform: rotate(45deg);
+    transition: all 0.6s;
+    opacity: 0;
+  }
+  
+  .activity-card:hover::before {
+    animation: shine 0.6s ease-in-out;
+  }
+  
+  @keyframes shine {
+    0% { transform: translateX(-100%) translateY(-100%) rotate(45deg); opacity: 0; }
+    50% { opacity: 1; }
+    100% { transform: translateX(100%) translateY(100%) rotate(45deg); opacity: 0; }
+  }
+  
+  .activity-card:hover {
+    transform: translateY(-8px) scale(1.02);
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+  }
+  
+  .activity-icon {
+    animation: float 3s ease-in-out infinite;
+  }
+  
+  .activity-illustration {
+    transition: transform 0.3s ease;
+  }
+  
+  .activity-card:hover .activity-illustration {
+    transform: scale(1.1);
+  }
+  
+  /* Efectos para botones */
+  .activity-button {
+    position: relative;
+    overflow: hidden;
+    background: linear-gradient(45deg, #3b82f6, #8b5cf6);
+    transition: all 0.3s ease;
+  }
+  
+  .activity-button::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+    transition: left 0.5s;
+  }
+  
+  .activity-button:hover::before {
+    left: 100%;
+  }
+  
+  .activity-button:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2);
+  }
+  
+  /* Categorías con efectos */
+  .category-filter {
+    position: relative;
+    transition: all 0.3s ease;
+  }
+  
+  .category-filter:hover {
+    transform: translateY(-2px);
+  }
+  
+  .category-filter.selected {
+    animation: bounce-in 0.5s ease;
+  }
+  
+  /* Efectos para badges */
+  .difficulty-badge {
+    position: relative;
+    transition: all 0.3s ease;
+  }
+  
+  .difficulty-badge::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    border-radius: inherit;
+    background: linear-gradient(45deg, rgba(255, 255, 255, 0.2), transparent);
+    opacity: 0;
+    transition: opacity 0.3s ease;
+  }
+  
+  .activity-card:hover .difficulty-badge::after {
+    opacity: 1;
+  }
+  
+  /* Loading states */
+  .activity-skeleton {
+    background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+    background-size: 200% 100%;
+    animation: loading 1.5s infinite;
+  }
+  
+  @keyframes loading {
+    0% { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+  }
+  
+  /* Efectos de revelación para contenido */
+  .reveal-animation {
+    animation: slide-in-left 0.6s ease-out;
+  }
+  
+  .reveal-animation:nth-child(2) {
+    animation-delay: 0.1s;
+  }
+  
+  .reveal-animation:nth-child(3) {
+    animation-delay: 0.2s;
+  }
+  
+  .reveal-animation:nth-child(4) {
+    animation-delay: 0.3s;
+  }
+  
+  /* Efectos para ilustraciones SVG */
+  .activity-svg-element {
+    transition: all 0.3s ease;
+  }
+  
+  .activity-card:hover .activity-svg-element {
+    transform: scale(1.1);
+    filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.2));
+  }
+  
+  /* Efectos de partículas (decorativo) */
+  .particle-effect {
+    position: absolute;
+    width: 4px;
+    height: 4px;
+    background: rgba(255, 255, 255, 0.6);
+    border-radius: 50%;
+    animation: particle-float 3s infinite;
+  }
+  
+  @keyframes particle-float {
+    0%, 100% { 
+      transform: translateY(0) rotate(0deg);
+      opacity: 0;
+    }
+    10%, 90% {
+      opacity: 1;
+    }
+    50% { 
+      transform: translateY(-50px) rotate(180deg);
+    }
+  }
+  
+  .particle-effect:nth-child(1) { animation-delay: 0s; }
+  .particle-effect:nth-child(2) { animation-delay: 0.5s; }
+  .particle-effect:nth-child(3) { animation-delay: 1s; }
+  .particle-effect:nth-child(4) { animation-delay: 1.5s; }
+  
+  /* Responsive adjustments */
+  @media (max-width: 768px) {
+    .activity-card:hover {
+      transform: translateY(-4px) scale(1.01);
+    }
+    
+    .activity-illustration {
+      height: 120px;
+    }
+  }
+  
+  /* Estados de interacción para accesibilidad */
+  .activity-card:focus {
+    outline: 3px solid #3b82f6;
+    outline-offset: 2px;
+  }
+  
+  .activity-button:focus {
+    outline: 2px solid #ffffff;
+    outline-offset: 2px;
+  }
+  
+  /* Efectos especiales para diferentes categorías */
+  .category-social .activity-card:hover {
+    box-shadow: 0 20px 40px rgba(245, 158, 11, 0.2);
+  }
+  
+  .category-attention .activity-card:hover {
+    box-shadow: 0 20px 40px rgba(59, 130, 246, 0.2);
+  }
+  
+  .category-impulse .activity-card:hover {
+    box-shadow: 0 20px 40px rgba(239, 68, 68, 0.2);
+  }
+  
+  .category-motor .activity-card:hover {
+    box-shadow: 0 20px 40px rgba(34, 197, 94, 0.2);
+  }
+  
+  .category-cognitive .activity-card:hover {
+    box-shadow: 0 20px 40px rgba(139, 92, 246, 0.2);
+  }

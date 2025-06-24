@@ -317,96 +317,40 @@ function SecuenciasPalabras({ perfilNino, onScoreUpdate, onClose }) {
     try {
       const nivel = perfilNino?.resultadosEvaluacion?.nivelAsignado?.nivel || 'basico';
       const config = NIVELES_CONFIG[nivel];
-      
-      // Calcular puntos base
-      let puntosBase = estadoFinal.puntuacion || 0;
-      let puntosFinales = puntosBase;
+      // Usar la puntuación en pantalla como fuente de verdad
+      let puntosFinales = state.puntuacion;
       let bonificaciones = [];
-      
-      // Bonificaciones especiales
-      if (estadoFinal.comboActual >= config.maxCombo) {
-        const bonusCombo = Math.floor(puntosBase * 0.4);
-        puntosFinales += bonusCombo;
-        bonificaciones.push(`🔥 Combo perfecto: +${bonusCombo}`);
-      }
-      
-      // Bonificación por velocidad (si completó rápido)
-      if (estadoFinal.tiempoRestante > config.tiempoMemorizar * 0.3) {
-        const bonusVelocidad = Math.floor(puntosBase * 0.2);
-        puntosFinales += bonusVelocidad;
-        bonificaciones.push(`⚡ Velocidad: +${bonusVelocidad}`);
-      }
-      
-      // Bonificación por perfección (sin errores)
-      const intentosTotales = estadoFinal.secuenciaCompletada * config.numElementos;
-      const errores = intentosTotales - (estadoFinal.respuestasCorrectas || 0);
-      
-      if (errores === 0 && estadoFinal.secuenciaCompletada > 0) {
-        const bonusPerfecto = Math.floor(puntosBase * 0.5);
-        puntosFinales += bonusPerfecto;
-        bonificaciones.push(`💎 Perfección: +${bonusPerfecto}`);
-      }
-      
-      // Aplicar multiplicador de eventos
-      puntosFinales = RewardsService.aplicarMultiplicadorEvento(puntosFinales, 'eco');
-      
-      // Agregar puntos al perfil
+      // Bonificaciones especiales (si se muestran en tiempo real, ya están sumadas)
+      // Otorgar puntos
       await RewardsService.agregarPuntos(
         perfilNino.id,
         puntosFinales,
         `ECO completado - Nivel: ${nivel} - Secuencias: ${estadoFinal.secuenciaCompletada}`
       );
-
-      // Preparar datos para logros
-      const datosProgreso = {
-        ...perfilNino,
-        puntosTotales: (perfilNino.puntosTotales || 0) + puntosFinales,
-        estadisticasJuegos: {
-          ...perfilNino.estadisticasJuegos,
-          eco: {
-            ...perfilNino.estadisticasJuegos?.eco,
-            victorias: (perfilNino.estadisticasJuegos?.eco?.victorias || 0) + 1,
-            secuenciasCompletadas: (perfilNino.estadisticasJuegos?.eco?.secuenciasCompletadas || 0) + estadoFinal.secuenciaCompletada,
-            maxComboAlcanzado: Math.max(
-              perfilNino.estadisticasJuegos?.eco?.maxComboAlcanzado || 0,
-              estadoFinal.maxCombo
-            ),
-            tiemposRecord: errores === 0 ? 
-              (perfilNino.estadisticasJuegos?.eco?.tiemposRecord || 0) + 1 : 
-              (perfilNino.estadisticasJuegos?.eco?.tiemposRecord || 0)
-          }
-        },
-        // Agregar si fue perfecto para el logro de perfeccionista
-        actividadesPerfectas: errores === 0 ? 
-          (perfilNino.actividadesPerfectas || 0) + 1 : 
-          (perfilNino.actividadesPerfectas || 0)
-      };
-
-      // Verificar nuevos logros
-      const nuevosLogros = await RewardsService.verificarYOtorgarLogros(
+      // Otorgar estrellas
+      const recompensa = await RewardsService.otorgarRecompensaActividad(
         perfilNino.id,
-        datosProgreso
+        'eco',
+        {
+          porcentajeCorrecto: 0, // Puedes calcular si es relevante
+          tiempo: 0,
+          tiempoObjetivo: 0
+        }
       );
-
-      // Mostrar notificación de logros
-      if (nuevosLogros.length > 0) {
-        toast.success(`🎉 ¡${nuevosLogros.length} nuevo${nuevosLogros.length > 1 ? 's' : ''} logro${nuevosLogros.length > 1 ? 's' : ''}!`);
-      }
-
-      // Notificar al componente padre
+      // Notificar a la IU
       if (onScoreUpdate) {
         onScoreUpdate({
           puntos: puntosFinales,
+          estrellas: recompensa.estrellas,
           bonificaciones,
           nombreJuego: 'ECO - Secuencias de Palabras',
           tipoJuego: 'eco',
           nivel,
           secuenciasCompletadas: estadoFinal.secuenciaCompletada,
           combo: estadoFinal.maxCombo,
-          perfecto: errores === 0
+          perfecto: false // Puedes ajustar si tienes lógica de perfección
         });
       }
-
       // Actualizar el estado del juego
       dispatch({ 
         type: GAME_ACTIONS.END_GAME, 

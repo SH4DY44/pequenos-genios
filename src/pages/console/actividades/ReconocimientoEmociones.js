@@ -176,95 +176,35 @@ function ReconocimientoEmociones({ actividad, perfilNino, onComplete, onClose, r
   
   // Función para finalizar la actividad y redirigir
   const finalizarActividad = async () => {
-    console.log("DEBUG: Inicia finalizarActividad");
-    if (actividadCompletada) {
-      console.log("DEBUG: Actividad ya completada, saliendo de finalizarActividad");
-      return;
-    }
-    
+    if (actividadCompletada) return;
     setActividadCompletada(true);
     setCargando(true);
-
     try {
-      // Calcular puntos basados en el rendimiento
-      const porcentajeAciertos = (puntuacion / totalRondas) * 100;
-      let puntosBase = Math.floor(porcentajeAciertos * 2); // 2 puntos por % de acierto
-      let puntosFinales = puntosBase;
-      let bonificaciones = [];
-
-      // Bonificaciones
-      if (porcentajeAciertos === 100) {
-        const bonusPerfecto = 50;
-        puntosFinales += bonusPerfecto;
-        bonificaciones.push(`💎 Perfección: +${bonusPerfecto}`);
-      } else if (porcentajeAciertos >= 80) {
-        const bonusExcelente = 25;
-        puntosFinales += bonusExcelente;
-        bonificaciones.push(`⭐ Excelente: +${bonusExcelente}`);
-      }
-
-      // Agregar puntos al sistema
+      // Usar la puntuación en pantalla como fuente de verdad
+      let puntosFinales = puntuacion;
       await RewardsService.agregarPuntos(
         perfilNino.id,
         puntosFinales,
-        `Reconocimiento de Emociones - ${porcentajeAciertos}% aciertos`
+        `Reconocimiento de Emociones - ${actividad?.titulo || ''}`
       );
-
-      console.log("DEBUG: Llamando a otorgarRecompensaActividad con:", {
-        profileId: perfilNino.id,
-        actividadId: actividad.id,
-        resultado: { porcentajeCorrecto: porcentajeAciertos, tiempo: 0, tiempoObjetivo: 0 }
-      });
-
-      // Otorgar recompensa de estrellas
-      await RewardsService.otorgarRecompensaActividad(
+      // Otorgar solo 1 estrella
+      const recompensa = await RewardsService.otorgarRecompensaActividad(
         perfilNino.id,
         actividad.id,
         {
-          porcentajeCorrecto: porcentajeAciertos,
-          tiempo: 0, // No aplica para esta actividad
-          tiempoObjetivo: 0 // No aplica para esta actividad
+          porcentajeCorrecto: 50,
+          tiempo: 100,
+          tiempoObjetivo: 0
         }
       );
-
-      // Actualizar estadísticas para logros
-      const datosProgreso = {
-        ...perfilNino,
-        actividadesCompletadas: (perfilNino.actividadesCompletadas || 0) + 1,
-        puntosTotales: (perfilNino.puntosTotales || 0) + puntosFinales,
-        estadisticasCategorias: {
-          ...perfilNino.estadisticasCategorias,
-          'habilidades-sociales': {
-            ...perfilNino.estadisticasCategorias?.['habilidades-sociales'],
-            completadas: (perfilNino.estadisticasCategorias?.['habilidades-sociales']?.completadas || 0) + 1,
-            puntuacionTotal: (perfilNino.estadisticasCategorias?.['habilidades-sociales']?.puntuacionTotal || 0) + puntosFinales
-          }
-        },
-        actividadesPerfectas: porcentajeAciertos === 100 ? 
-          (perfilNino.actividadesPerfectas || 0) + 1 : 
-          (perfilNino.actividadesPerfectas || 0)
-      };
-
-      // Verificar logros
-      await RewardsService.verificarYOtorgarLogros(perfilNino.id, datosProgreso);
-
-      // Notificar éxito
-      toast.success(`¡Actividad completada! +${puntosFinales} puntos`);
-
-      // Navegar de vuelta
-      setTimeout(() => {
-        if (onComplete) {
-          onComplete({
-            puntos: puntosFinales,
-            bonificaciones,
-            porcentajeAciertos,
-            nombreActividad: 'Reconocimiento de Emociones'
-          });
-        } else {
-          navigate('/console', { state: { profileId: perfilNino?.id } });
-        }
-      }, 2000);
-
+      // Notificar a la IU (si aplica)
+      if (onComplete) {
+        onComplete({
+          puntos: puntosFinales,
+          estrellas: recompensa.estrellas,
+          nombreActividad: actividad?.titulo || 'Reconocimiento de Emociones'
+        });
+      }
     } catch (error) {
       console.error('Error finalizando actividad:', error);
       toast.error('Error al guardar el progreso');

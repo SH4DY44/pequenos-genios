@@ -216,25 +216,20 @@ function Memorama({ perfilNino, onScoreUpdate, onClose }) {
   const finalizarJuego = async (victoria = false) => {
     if (!juegoTerminado) {
       setJuegoTerminado(true);
-      
-      // Calcular puntos con el sistema de recompensas
-      const config = configuracionNivel[perfilNino?.resultadosEvaluacion?.nivelAsignado?.nivel || 'basico'];
-      let puntosBase = config.puntosPorAcierto * cartasEmparejadas.length / 2;
-      
-      // Bonificaciones
-      let puntosFinales = puntosBase;
+      // Usar la puntuación en pantalla como fuente de verdad
+      let puntosFinales = puntuacion;
       let bonificaciones = [];
       
       // Bonificación por tiempo (si hay límite y lo cumplió)
-      if (config.tiempoLimite && tiempoTranscurrido < config.tiempoLimite * 0.7) {
-        const bonusVelocidad = Math.floor(puntosBase * 0.5);
+      if (configuracionActual.tiempoLimite && tiempoTranscurrido < configuracionActual.tiempoLimite * 0.7) {
+        const bonusVelocidad = Math.floor(puntosFinales * 0.5);
         puntosFinales += bonusVelocidad;
         bonificaciones.push(`⚡ Velocidad: +${bonusVelocidad}`);
       }
       
       // Bonificación por combo perfecto
       if (maxCombo >= 5) {
-        const bonusCombo = Math.floor(puntosBase * 0.3);
+        const bonusCombo = Math.floor(puntosFinales * 0.3);
         puntosFinales += bonusCombo;
         bonificaciones.push(`🔥 Combo máximo: +${bonusCombo}`);
       }
@@ -243,12 +238,35 @@ function Memorama({ perfilNino, onScoreUpdate, onClose }) {
       puntosFinales = RewardsService.aplicarMultiplicadorEvento(puntosFinales, 'memorama');
       
       try {
-        // Agregar puntos al perfil
+        // Guardar puntos
         await RewardsService.agregarPuntos(
           perfilNino.id,
           puntosFinales,
-          `Memorama completado - Nivel: ${config.descripcion}`
+          `Memorama completado - Nivel: ${configuracionActual.descripcion}`
         );
+        // Otorgar estrellas
+        const recompensa = await RewardsService.otorgarRecompensaActividad(
+          perfilNino.id,
+          'memorama',
+          {
+            porcentajeCorrecto: 0,
+            tiempo: 0,
+            tiempoObjetivo: 0
+          }
+        );
+        // Notificar a la IU
+        if (onScoreUpdate) {
+          onScoreUpdate({
+            puntos: puntosFinales,
+            estrellas: recompensa.estrellas,
+            bonificaciones,
+            nombreJuego: 'Memorama',
+            tipoJuego: 'memorama',
+            nivel: perfilNino?.resultadosEvaluacion?.nivelAsignado?.nivel,
+            tiempoTranscurrido,
+            combo: maxCombo
+          });
+        }
 
         // Actualizar estadísticas del juego para logros
         const datosProgreso = {
@@ -287,19 +305,6 @@ function Memorama({ perfilNino, onScoreUpdate, onClose }) {
         // Actualizar puntuación en la UI
         setPuntuacion(puntosFinales);
         
-        // Notificar al componente padre
-        if (onScoreUpdate) {
-          onScoreUpdate({
-            puntos: puntosFinales,
-            bonificaciones,
-            nombreJuego: 'Memorama',
-            tipoJuego: 'memorama',
-            nivel: perfilNino?.resultadosEvaluacion?.nivelAsignado?.nivel,
-            tiempoTranscurrido,
-            combo: maxCombo
-          });
-        }
-
         // Actualizar juegos completados en la BD
         await updateDoc(doc(db, 'childProfiles', perfilNino.id), {
           juegosCompletados: increment(1)

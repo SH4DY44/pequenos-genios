@@ -79,31 +79,37 @@ function ControlImpulsos({ actividad, perfilNino, onComplete, onClose }) {
   const finalizarActividad = useCallback(async () => {
     setActividadCompletada(true);
     setGameState(GAME_STATE.COMPLETADO);
-    
     try {
-      // Calcular porcentaje de aciertos
-      const porcentajeAciertos = (puntuacion / (totalRondas * configActual.puntosPorAcierto)) * 100;
-      
-      // Actualizar puntos en Firebase
-      await actualizarPuntosEnFirebase(puntuacion);
-      
-      // Otorgar recompensa de estrellas
-      await RewardsService.otorgarRecompensaActividad(
+      // Usar la puntuación en pantalla como fuente de verdad
+      let puntosFinales = puntuacion;
+      await RewardsService.agregarPuntos(
+        perfilNino.id,
+        puntosFinales,
+        `Control de Impulsos - ${actividad?.titulo || ''}`
+      );
+      // Otorgar solo 1 estrella
+      const recompensa = await RewardsService.otorgarRecompensaActividad(
         perfilNino.id,
         actividad.id,
         {
-          porcentajeCorrecto: 0,
-          tiempo: 0,
+          porcentajeCorrecto: 50,
+          tiempo: 100,
           tiempoObjetivo: 0
         }
       );
-      
-      onComplete?.({ puntuacion, completada: true });
+      // Notificar a la IU (si aplica)
+      if (onComplete) {
+        onComplete({
+          puntos: puntosFinales,
+          estrellas: recompensa.estrellas,
+          nombreActividad: actividad?.titulo || 'Control de Impulsos'
+        });
+      }
     } catch (error) {
       console.error('Error finalizando actividad:', error);
       toast.error('Error al guardar el progreso');
     }
-  }, [actualizarPuntosEnFirebase, onComplete, puntuacion, totalRondas, configActual, perfilNino, actividad]);
+  }, [puntuacion, perfilNino, actividad, onComplete]);
 
   // Funciones del juego (orden corregido)
   const pasarSiguienteRonda = useCallback((delay) => {
