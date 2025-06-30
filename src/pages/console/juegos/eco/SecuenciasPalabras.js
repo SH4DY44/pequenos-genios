@@ -568,7 +568,7 @@ function SecuenciasPalabras({ perfilNino, onScoreUpdate, onClose }) {
           <div className="text-center mb-8">
             <h3 className="text-xl font-bold mb-4">Memoriza esta secuencia:</h3>
             <div className="flex justify-center space-x-4">
-              {state.secuenciaActual.map((palabra, index) => (
+              {state.secuenciaActual.map((palabra, index) => ( 
                 <div
                   key={`${palabra.id}-${index}`}
                   className="bg-blue-100 p-4 rounded-lg text-center"
