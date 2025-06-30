@@ -233,7 +233,8 @@ function ReconocimientoEmociones({ actividad, perfilNino, onComplete, onClose })
           nivel: nivelActual,
           respuestasCorrectas: respuestasCorrectas,
           totalRondas: config.totalRondas,
-          tiempoUsado: Math.round(tiempoTranscurrido)
+          tiempoUsado: Math.round(tiempoTranscurrido),
+          esActividad: true
         });
       }
 

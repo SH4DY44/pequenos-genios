@@ -264,7 +264,8 @@ function Memorama({ perfilNino, onScoreUpdate, onClose }) {
             tipoJuego: 'memorama',
             nivel: perfilNino?.resultadosEvaluacion?.nivelAsignado?.nivel,
             tiempoTranscurrido,
-            combo: maxCombo
+            combo: maxCombo,
+            esActividad:true
           });
         }
 

@@ -265,7 +265,8 @@ function SecuenciasPalabras({ perfilNino, onScoreUpdate, onClose }) {
           combo: estadoFinal.maxCombo,
           porcentajeCompletado: Math.round(porcentajeCorrecto),
           tiempoUsado: Math.round(tiempoTranscurrido),
-          perfecto: secuenciasCompletadas === totalSecuenciasEsperadas
+          perfecto: secuenciasCompletadas === totalSecuenciasEsperadas,
+          esActividad:true
         });
       }
 

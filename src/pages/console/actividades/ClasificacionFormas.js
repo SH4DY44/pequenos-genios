@@ -276,7 +276,8 @@ function ClasificacionFormas({ actividad, perfilNino, onComplete, onClose }) {
           nombreActividad: actividad?.titulo || 'Clasificación de Formas',
           porcentajeCompletado: Math.round(porcentajeCorrecto),
           nivel: nivelActual,
-          tiempoUsado: Math.round(tiempoTranscurrido)
+          tiempoUsado: Math.round(tiempoTranscurrido),
+          esActividad: true 
         });
       }
 

@@ -90,9 +90,6 @@ export class RewardsService {
         actualizaciones.puntosTotales = increment(logro.recompensa.puntos);
       }
       
-      if (logro.recompensa.estrellas) {
-        actualizaciones.estrellas = increment(logro.recompensa.estrellas);
-      }
       
       // Si hay recompensa especial, agregarla al inventario
       if (logro.recompensa.recompensaEspecial) {
@@ -122,7 +119,7 @@ export class RewardsService {
             logro: logro.nombre,
             descripcion: logro.descripcion,
             puntos: logro.recompensa.puntos || 0,
-            estrellas: logro.recompensa.estrellas || 0,
+            estrellas: 0,
             icono: logro.icono
           }
         );
@@ -614,31 +611,41 @@ export class RewardsService {
         throw new Error('Perfil no encontrado');
       }
       
-      const perfilData = perfilDoc.data();
       const recompensa = {
         puntos: 0,
-        estrellas: 0
+        estrellas: 1  // SIEMPRE 1 ESTRELLA
       };
       
-      // Estrellas por completar actividad
-      recompensa.estrellas += 1;
+      // REMOVIDO: Sistema de bonificaciones de estrellas
+      // if (resultado.porcentajeCorrecto === 100) {
+      //   recompensa.estrellas += 1;
+      // }
+      // if (resultado.tiempo < resultado.tiempoObjetivo) {
+      //   recompensa.estrellas += 1;
+      // }
       
-      // Estrellas por perfección
+      // NUEVO: Bonificar con puntos extra en lugar de estrellas
+      let puntosBonus = 0;
       if (resultado.porcentajeCorrecto === 100) {
-        recompensa.estrellas += 1;
+        puntosBonus += 10; // +10 puntos por perfección
+      }
+      if (resultado.tiempo && resultado.tiempoObjetivo && resultado.tiempo < resultado.tiempoObjetivo) {
+        puntosBonus += 5; // +5 puntos por velocidad
       }
       
-      // Estrellas por velocidad
-      if (resultado.tiempo < resultado.tiempoObjetivo) {
-        recompensa.estrellas += 1;
-      }
+      // Otorgar 1 estrella
+      await this.agregarEstrellas(
+        profileId,
+        1,
+        'Completar actividad'
+      );
       
-      // Otorgar recompensas
-      if (recompensa.estrellas > 0) {
-        await this.agregarEstrellas(
+      // Otorgar puntos bonus si los hay
+      if (puntosBonus > 0) {
+        await this.agregarPuntos(
           profileId,
-          recompensa.estrellas,
-          'Completar actividad'
+          puntosBonus,
+          `Bonificación: ${resultado.porcentajeCorrecto}% correcto${resultado.tiempo < resultado.tiempoObjetivo ? ', tiempo récord' : ''}`
         );
       }
       

@@ -92,7 +92,7 @@ function ConsolaNino() {
     try {
       // Actualizar racha diaria
       await actualizarRachaDiaria();
-
+  
       // Agregar puntos usando el sistema de recompensas
       if (gameData.puntos > 0) {
         await RewardsService.agregarPuntos(
@@ -101,34 +101,35 @@ function ConsolaNino() {
           `${gameData.nombreJuego} - Nivel: ${gameData.nivel || 'básico'}`
         );
       }
-
-      // Agregar estrellas si las hay
-      if (gameData.estrellas > 0) {
+  
+      // ✅ RESTAURADO: Agregar estrellas si las hay
+      // Pero solo si NO es una actividad (que ya las procesó directamente)
+      if (gameData.estrellas > 0 && !gameData.esActividad) {
         await RewardsService.agregarEstrellas(
           profileId,
           gameData.estrellas,
-          `Bonus ${gameData.nombreJuego}`
+          `${gameData.nombreJuego || 'Juego'} completado`
         );
       }
-
+  
       // Actualizar estadísticas del juego para detección de logros
       const datosActualizados = {
         ...perfilNino,
         actividadesCompletadas: (perfilNino.actividadesCompletadas || 0) + 1,
         puntosTotales: (perfilNino.puntosTotales || 0) + gameData.puntos,
-        [`estadisticasJuegos.${gameData.tipoJuego}`]: {
-          ...perfilNino.estadisticasJuegos?.[gameData.tipoJuego],
-          victorias: (perfilNino.estadisticasJuegos?.[gameData.tipoJuego]?.victorias || 0) + 1,
-          puntosTotales: (perfilNino.estadisticasJuegos?.[gameData.tipoJuego]?.puntosTotales || 0) + gameData.puntos,
+        [`estadisticasJuegos.${gameData.tipoJuego || 'general'}`]: {
+          ...perfilNino.estadisticasJuegos?.[gameData.tipoJuego || 'general'],
+          victorias: (perfilNino.estadisticasJuegos?.[gameData.tipoJuego || 'general']?.victorias || 0) + 1,
+          puntosTotales: (perfilNino.estadisticasJuegos?.[gameData.tipoJuego || 'general']?.puntosTotales || 0) + gameData.puntos,
           ultimoJuego: Timestamp.now()
         }
       };
-
+  
       // Si fue un juego perfecto, actualizar contador
       if (gameData.perfecto) {
         datosActualizados.actividadesPerfectas = (perfilNino.actividadesPerfectas || 0) + 1;
       }
-
+  
       // Verificar y otorgar nuevos logros
       const nuevosLogros = await RewardsService.verificarYOtorgarLogros(profileId, datosActualizados);
       
@@ -136,16 +137,16 @@ function ConsolaNino() {
         setNuevosLogros(prevLogros => [...prevLogros, ...nuevosLogros]);
         toast.success(`🎉 ¡${nuevosLogros.length} nuevo${nuevosLogros.length > 1 ? 's' : ''} logro${nuevosLogros.length > 1 ? 's' : ''}!`);
       }
-
+  
       // Mostrar resumen de recompensas
       const mensajeRecompensas = [];
       if (gameData.puntos > 0) mensajeRecompensas.push(`+${gameData.puntos} puntos`);
-      if (gameData.estrellas > 0) mensajeRecompensas.push(`+${gameData.estrellas} estrellas`);
+      if (gameData.estrellas > 0) mensajeRecompensas.push(`+${gameData.estrellas} estrella${gameData.estrellas > 1 ? 's' : ''}`);
       
       if (mensajeRecompensas.length > 0) {
         toast.success(`¡Recompensas obtenidas! ${mensajeRecompensas.join(', ')}`);
       }
-
+  
     } catch (error) {
       console.error('Error actualizando puntuación:', error);
       toast.error('Error al guardar el progreso');

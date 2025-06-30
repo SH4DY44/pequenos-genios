@@ -64,7 +64,7 @@ export const TipoRecompensa = {
       rareza: RarezaRecompensa.COMUN,
       recompensa: {
         puntos: 50,
-        estrellas: 1
+        //estrellas: 1
       }
     },
     
@@ -77,7 +77,7 @@ export const TipoRecompensa = {
       rareza: RarezaRecompensa.COMUN,
       recompensa: {
         puntos: 100,
-        estrellas: 2
+        //estrellas: 2
       }
     },
     
@@ -90,7 +90,7 @@ export const TipoRecompensa = {
       rareza: RarezaRecompensa.RARO,
       recompensa: {
         puntos: 300,
-        estrellas: 5,
+        //estrellas: 5,
         recompensaEspecial: {
           tipo: TipoRecompensa.INSIGNIA,
           id: 'insignia_aprendiz'
@@ -108,7 +108,7 @@ export const TipoRecompensa = {
       rareza: RarezaRecompensa.COMUN,
       recompensa: {
         puntos: 50,
-        estrellas: 1
+        //estrellas: 1
       }
     },
     
@@ -139,7 +139,7 @@ export const TipoRecompensa = {
       rareza: RarezaRecompensa.RARO,
       recompensa: {
         puntos: 150,
-        estrellas: 3
+        //estrellas: 3
       }
     },
     
@@ -170,7 +170,7 @@ export const TipoRecompensa = {
       rareza: RarezaRecompensa.RARO,
       recompensa: {
         puntos: 200,
-        estrellas: 4
+        //estrellas: 4
       }
     },
     
@@ -183,7 +183,7 @@ export const TipoRecompensa = {
       rareza: RarezaRecompensa.RARO,
       recompensa: {
         puntos: 180,
-        estrellas: 3
+        //estrellas: 3
       }
     },
   
