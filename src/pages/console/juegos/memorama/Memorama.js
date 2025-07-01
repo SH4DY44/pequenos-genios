@@ -17,6 +17,7 @@ function Memorama({ perfilNino, onScoreUpdate, onClose }) {
   const [tiempoTranscurrido, setTiempoTranscurrido] = useState(0);
   const [juegoTerminado, setJuegoTerminado] = useState(false);
   const [showTutorial, setShowTutorial] = useState(true);
+  const [puntosGuardadosEnBD, setPuntosGuardadosEnBD] = useState(0);
 
   // Estados del sistema de combo
   const [comboActual, setComboActual] = useState(1);
@@ -148,17 +149,7 @@ function Memorama({ perfilNino, onScoreUpdate, onClose }) {
     const multiplicador = Math.min(3, 1 + (comboActual * 0.5));
     const puntosGanados = Math.floor(puntosPorAcierto * multiplicador);
 
-    // Actualizar puntos y sumarlos en la BD
-    try {
-      if (onScoreUpdate) {
-        await onScoreUpdate(puntosGanados);
-      }
-    } catch (error) {
-      console.error("Error al actualizar puntos:", error);
-      toast.error("Error al guardar los puntos");
-    }
-
-    // Solo actualizamos la puntuación local, ya que onScoreUpdate ya actualiza la BD
+    // ✅ SOLO actualizar puntuación LOCAL - NO llamar onScoreUpdate aquí
     setPuntuacion(prev => prev + puntosGanados);
     setPuntuacionBase(prev => prev + puntosPorAcierto);
 
@@ -238,36 +229,16 @@ function Memorama({ perfilNino, onScoreUpdate, onClose }) {
       puntosFinales = RewardsService.aplicarMultiplicadorEvento(puntosFinales, 'memorama');
       
       try {
-        // Guardar puntos
+        // ✅ Guardar TODOS los puntos totales en la BD (SOLO ESTA LÍNEA GUARDA PUNTOS)
         await RewardsService.agregarPuntos(
           perfilNino.id,
           puntosFinales,
           `Memorama completado - Nivel: ${configuracionActual.descripcion}`
         );
-        // Otorgar estrellas
-        const recompensa = await RewardsService.otorgarRecompensaActividad(
-          perfilNino.id,
-          'memorama',
-          {
-            porcentajeCorrecto: 0,
-            tiempo: 0,
-            tiempoObjetivo: 0
-          }
-        );
-        // Notificar a la IU
-        if (onScoreUpdate) {
-          onScoreUpdate({
-            puntos: puntosFinales,
-            estrellas: recompensa.estrellas,
-            bonificaciones,
-            nombreJuego: 'Memorama',
-            tipoJuego: 'memorama',
-            nivel: perfilNino?.resultadosEvaluacion?.nivelAsignado?.nivel,
-            tiempoTranscurrido,
-            combo: maxCombo,
-            esActividad:true
-          });
-        }
+        
+        // ✅ NO llamar otorgarRecompensaActividad porque también agrega puntos automáticamente
+        // Solo toastificar que se completó
+        toast.success(`🎉 ¡Memorama completado! ${puntosFinales} puntos ganados`);
 
         // Actualizar estadísticas del juego para logros
         const datosProgreso = {
