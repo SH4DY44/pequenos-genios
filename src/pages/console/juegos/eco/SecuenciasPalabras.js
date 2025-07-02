@@ -1,5 +1,4 @@
-// src/pages/console/juegos/eco/SecuenciasPalabras.js - VERSIÓN CORREGIDA
-import React, { useState, useEffect, useCallback, useMemo, useReducer } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useReducer, useRef } from 'react';
 import { doc, updateDoc, increment } from 'firebase/firestore';
 import { db } from '../../../../config/firebase';
 import { toast } from 'react-toastify';
@@ -38,7 +37,6 @@ const initialState = {
   juegoActivo: false,
   juegoTerminado: false,
   secuenciaCompletada: 0,
-  secuenciasCorrectas: 0, // ✅ AGREGADO: Contador de secuencias correctas
   mostrandoSecuencia: false,
   seleccionandoSecuencia: false
 };
@@ -93,13 +91,13 @@ function gameReducer(state, action) {
       };
 
     case GAME_ACTIONS.COMPLETE_SEQUENCE:
+      const nuevaSecuenciaCompletada = state.secuenciaCompletada + 1;
       return {
         ...state,
         puntuacion: state.puntuacion + action.payload.puntos,
         comboActual: state.comboActual + 1,
         maxCombo: Math.max(state.maxCombo, state.comboActual + 1),
-        secuenciaCompletada: state.secuenciaCompletada + 1,
-        secuenciasCorrectas: state.secuenciasCorrectas + 1, // ✅ AGREGADO
+        secuenciaCompletada: nuevaSecuenciaCompletada,
         mostrandoSecuencia: false,
         seleccionandoSecuencia: false,
         tiempoRestante: null
@@ -122,7 +120,8 @@ function gameReducer(state, action) {
         juegoTerminado: true,
         mostrandoSecuencia: false,
         seleccionandoSecuencia: false,
-        tiempoRestante: null
+        tiempoRestante: null,
+        ...action.payload
       };
 
     case GAME_ACTIONS.RESET_GAME:
@@ -136,14 +135,20 @@ function gameReducer(state, action) {
 function SecuenciasPalabras({ perfilNino, onScoreUpdate, onClose }) {
   const [state, dispatch] = useReducer(gameReducer, initialState);
   const [showTutorial, setShowTutorial] = useState(true);
-  const [tiempoInicio, setTiempoInicio] = useState(null); // ✅ AGREGADO: Para medir tiempo total
+  const [tiempoInicio, setTiempoInicio] = useState(null);
+  
+  // REF PARA CONTROLAR FINALIZACIÓN INMEDIATA
+  const juegoFinalizandose = useRef(false);
 
   // Obtener configuración del nivel
   const configNivel = useMemo(() => {
     const nivelPerfil = perfilNino?.resultadosEvaluacion?.nivelAsignado?.nivel || 'básico';
+    console.log('Nivel perfil detectado:', nivelPerfil);
     const NIVEL_MAPPING = {
       'básico': 'basico',
+      'basico': 'basico',
       'básico-alto': 'básico-alto',
+      'basico-alto': 'básico-alto',
       'intermedio': 'intermedio',
       'avanzado': 'avanzado'
     };
@@ -158,75 +163,62 @@ function SecuenciasPalabras({ perfilNino, onScoreUpdate, onClose }) {
     audio.play().catch(() => {});
   }, []);
 
-  // ✅ CORREGIDO: Sistema de finalización con puntuación estándar
   const manejarFinJuego = async (estadoFinal) => {
     try {
-      // Calcular métricas reales del rendimiento
       const totalSecuenciasEsperadas = configNivel.numSecuencias;
-      const secuenciasCompletadas = estadoFinal.secuenciasCorrectas || 0;
+      const secuenciasCompletadas = estadoFinal.secuenciaCompletada || 0;
       const porcentajeCorrecto = (secuenciasCompletadas / totalSecuenciasEsperadas) * 100;
-      
-      // Tiempo transcurrido
       const tiempoTranscurrido = tiempoInicio ? (Date.now() - tiempoInicio) / 1000 : 0;
-      
-      // Calcular tiempo objetivo basado en configuración del nivel
-      const tiempoObjetivo = configNivel.numSecuencias * (
-        (configNivel.tiempoVisualizacion * configNivel.numElementos / 1000) + 
-        (configNivel.tiempoMemorizar || 30)
-      );
-      
-      // ✅ Puntuación según especificación del sistema
       const nivelActual = perfilNino?.resultadosEvaluacion?.nivelAsignado?.nivel || 'básico';
       const NIVEL_MAPPING = {
         'básico': 'basico',
-        'básico-alto': 'basico-alto',
+        'basico': 'basico',
+        'básico-alto': 'básico-alto',
+        'basico-alto': 'básico-alto',
         'intermedio': 'intermedio',
         'avanzado': 'avanzado'
       };
       const nivelMapeado = NIVEL_MAPPING[nivelActual] || 'basico';
-      
-      let puntosFinales = 0;
-      
-      if (secuenciasCompletadas >= (totalSecuenciasEsperadas * 0.6)) {
-        // Juego completado exitosamente (60% o más)
-        if (nivelMapeado === 'avanzado') {
-          puntosFinales = 20; // Nivel difícil = 20 pts
-        } else {
-          puntosFinales = 10; // Completar juego = 10 pts
-        }
-        
-        // Bonificación por tiempo récord (si completó rápido)
-        if (tiempoTranscurrido < (tiempoObjetivo * 0.7)) {
-          puntosFinales += 5; // 5 pts adicionales por tiempo récord
-        }
+
+      // PUNTAJE BASE
+      let puntosBase = estadoFinal.puntuacion || 0;
+      let bonificacion = 0;
+      let estrellas = 0;
+      let victoria = false;
+
+      // LÓGICA DE VICTORIA Y BONIFICACIÓN
+      if (secuenciasCompletadas >= totalSecuenciasEsperadas) {
+        victoria = true;
+        bonificacion = nivelMapeado === 'avanzado' ? 15 : 10;
+        estrellas = 3;
+      } else if (secuenciasCompletadas >= (totalSecuenciasEsperadas * 0.6)) {
+        victoria = true;
+        bonificacion = nivelMapeado === 'avanzado' ? 8 : 5;
+        estrellas = 2;
       } else {
-        // Juego incompleto - puntos proporcionales mínimos
-        puntosFinales = Math.max(5, Math.floor((configNivel.puntosBase * porcentajeCorrecto) / 100));
+        victoria = false;
+        bonificacion = 0;
+        estrellas = 0;
       }
 
-      // Agregar puntos
-      await RewardsService.agregarPuntos(
-        perfilNino.id,
+      let puntosFinales = Math.max(puntosBase + bonificacion, 5);
+
+      // LOGS PARA DEBUG
+      console.log('📊 PUNTAJE FINAL (solo para mostrar, NO se suma aquí):', {
+        puntosBase,
+        bonificacion,
         puntosFinales,
-        `ECO completado - Nivel: ${nivelActual} - Secuencias: ${secuenciasCompletadas}/${totalSecuenciasEsperadas}`
-      );
+        estrellas,
+        secuenciasCompletadas,
+        porcentaje: porcentajeCorrecto,
+        victoria
+      });
 
-      // ✅ CORREGIDO: Calcular estrellas con métricas reales
-      const recompensa = await RewardsService.otorgarRecompensaActividad(
-        perfilNino.id,
-        'eco',
-        {
-          porcentajeCorrecto: Math.round(porcentajeCorrecto),
-          tiempo: Math.round(tiempoTranscurrido),
-          tiempoObjetivo: Math.round(tiempoObjetivo)
-        }
-      );
-
-      // Actualizar estadísticas del juego
+      // NO sumar puntos ni estrellas aquí. Solo actualizar estadísticas y notificar.
       await updateDoc(doc(db, 'childProfiles', perfilNino.id), {
         juegosCompletados: increment(1),
         [`estadisticasJuegos.secuenciasPalabras.partidasJugadas`]: increment(1),
-        [`estadisticasJuegos.secuenciasPalabras.${secuenciasCompletadas >= totalSecuenciasEsperadas ? 'victorias' : 'derrotas'}`]: increment(1),
+        [`estadisticasJuegos.secuenciasPalabras.${victoria ? 'victorias' : 'derrotas'}`]: increment(1),
         [`estadisticasJuegos.secuenciasPalabras.maxPuntuacion`]: Math.max(
           (perfilNino?.estadisticasJuegos?.secuenciasPalabras?.maxPuntuacion || 0), 
           puntosFinales
@@ -234,7 +226,6 @@ function SecuenciasPalabras({ perfilNino, onScoreUpdate, onClose }) {
         actividadesCompletadas: increment(1)
       });
 
-      // Notificación persistente
       if (auth.currentUser) {
         await NotificationService.crearNotificacion({
           tutorId: auth.currentUser.uid,
@@ -244,19 +235,18 @@ function SecuenciasPalabras({ perfilNino, onScoreUpdate, onClose }) {
           mensaje: `Puntuación final: ${puntosFinales} puntos`,
           datos: { 
             puntos: puntosFinales, 
-            estrellas: recompensa.estrellas,
+            estrellas: estrellas,
             secuenciasCompletadas,
             porcentaje: Math.round(porcentajeCorrecto)
           },
-          prioridad: secuenciasCompletadas >= totalSecuenciasEsperadas ? 'alta' : 'normal'
+          prioridad: victoria ? 'alta' : 'normal'
         });
       }
 
-      // Notificar a la IU
       if (onScoreUpdate) {
         onScoreUpdate({
           puntos: puntosFinales,
-          estrellas: recompensa.estrellas,
+          estrellas: estrellas,
           nombreJuego: 'ECO - Secuencias de Palabras',
           tipoJuego: 'eco',
           nivel: nivelActual,
@@ -266,44 +256,46 @@ function SecuenciasPalabras({ perfilNino, onScoreUpdate, onClose }) {
           porcentajeCompletado: Math.round(porcentajeCorrecto),
           tiempoUsado: Math.round(tiempoTranscurrido),
           perfecto: secuenciasCompletadas === totalSecuenciasEsperadas,
-          esActividad:true
+          esActividad:true,
+          victoria: victoria
         });
       }
 
-      // Actualizar el estado del juego
+      // ACTUALIZAR EL ESTADO FINAL CON LOS DATOS COMPLETOS
       dispatch({ 
         type: GAME_ACTIONS.END_GAME, 
         payload: { 
-          ...estadoFinal, 
+          puntuacionBase: puntosBase,
+          bonificacion,
           puntuacionFinal: puntosFinales,
-          estrellas: recompensa.estrellas
+          estrellas,
+          victoria,
+          secuenciasCompletadas: secuenciasCompletadas,
+          totalSecuencias: totalSecuenciasEsperadas,
+          porcentajeCorrecto: Math.round(porcentajeCorrecto)
         } 
       });
 
-      console.log('✅ ECO completado:', {
-        puntos: puntosFinales,
-        estrellas: recompensa.estrellas,
-        porcentaje: porcentajeCorrecto,
-        nivel: nivelActual,
-        secuenciasCompletadas: secuenciasCompletadas,
-        tiempo: tiempoTranscurrido
-      });
-
       toast.success(`¡Juego terminado! Puntuación final: ${puntosFinales} puntos`);
-
     } catch (error) {
       console.error('Error finalizando juego ECO:', error);
       toast.error('Error al guardar el progreso');
     }
   };
 
-  // ✅ CORREGIDO: Finalizar juego con estado actual
   const finalizarJuego = async (victoria = false) => {
+    if (juegoFinalizandose.current) {
+      console.log('⛔ BLOQUEO: Ya se está finalizando');
+      return;
+    }
+    
+    console.log('🚨 FINALIZANDO JUEGO - Victoria:', victoria);
+    juegoFinalizandose.current = true;
+    
     await manejarFinJuego({
       ...state,
       victoria,
       secuenciaCompletada: state.secuenciaCompletada,
-      secuenciasCorrectas: state.secuenciasCorrectas,
       maxCombo: state.maxCombo,
       puntuacion: state.puntuacion
     });
@@ -311,6 +303,13 @@ function SecuenciasPalabras({ perfilNino, onScoreUpdate, onClose }) {
 
   // Función para generar nueva secuencia
   const generarSecuencia = useCallback(() => {
+    if (juegoFinalizandose.current || state.juegoTerminado || state.secuenciaCompletada >= configNivel.numSecuencias) {
+      console.log('⛔ BLOQUEO generarSecuencia: Juego finalizándose, terminado o máximo alcanzado');
+      return;
+    }
+
+    console.log('🎮 Generando nueva secuencia...');
+    
     const categoriasDisponibles = configNivel.categorias;
     const poolPalabras = categoriasDisponibles.flatMap(categoria => 
       CATEGORIAS[categoria] ? CATEGORIAS[categoria] : []
@@ -328,11 +327,11 @@ function SecuenciasPalabras({ perfilNino, onScoreUpdate, onClose }) {
     });
 
     mostrarSecuencia(secuencia);
-  }, [configNivel]);
+  }, [configNivel, state.juegoTerminado, state.secuenciaCompletada]);
 
   // Mostrar secuencia
   const mostrarSecuencia = async (secuencia) => {
-    if (!secuencia || !secuencia.length) return;
+    if (!secuencia || !secuencia.length || juegoFinalizandose.current || state.juegoTerminado) return;
     
     dispatch({ 
       type: GAME_ACTIONS.SHOW_SEQUENCE,
@@ -341,23 +340,111 @@ function SecuenciasPalabras({ perfilNino, onScoreUpdate, onClose }) {
       }
     });
   
-    // Mostrar cada elemento con delay
     for (let i = 0; i < secuencia.length; i++) {
+      if (juegoFinalizandose.current || state.juegoTerminado) break;
       await new Promise(resolve => setTimeout(resolve, configNivel.tiempoVisualizacion));
     }
   
-    dispatch({ 
-      type: GAME_ACTIONS.HIDE_SEQUENCE,
-      payload: { 
-        tiempo: configNivel.tiempoMemorizar
-      }
-    });
+    if (!juegoFinalizandose.current && !state.juegoTerminado) {
+      dispatch({ 
+        type: GAME_ACTIONS.HIDE_SEQUENCE,
+        payload: { 
+          tiempo: configNivel.tiempoMemorizar
+        }
+      });
+    }
   };
 
-  // Manejar selección de palabra
-  const handleWordSelection = useCallback(async (palabra) => {
-    if (state.mostrandoSecuencia || state.juegoTerminado) return;
+  const handleError = useCallback(async () => {
+    if (juegoFinalizandose.current || state.juegoTerminado) return;
 
+    dispatch({ type: GAME_ACTIONS.HANDLE_ERROR });
+
+    if (state.intentosRestantes <= 1) {
+      toast.error('¡Se acabaron los intentos!');
+      await finalizarJuego(false);
+      return;
+    }
+
+    toast.warning(`¡Secuencia incorrecta! Te quedan ${state.intentosRestantes - 1} intentos`);
+    setTimeout(() => {
+      if (!juegoFinalizandose.current && !state.juegoTerminado) {
+        generarSecuencia();
+      }
+    }, 1500);
+  }, [state.intentosRestantes, state.juegoTerminado, finalizarJuego, generarSecuencia]);
+
+  const handleSequenceComplete = useCallback(async () => {
+    if (juegoFinalizandose.current) {
+      console.log('⛔ BLOQUEO handleSequenceComplete: Juego finalizándose');
+      return;
+    }
+
+    console.log('🎯 SECUENCIA COMPLETADA!');
+    
+    const puntosPorAcierto = configNivel.puntosBase;
+    const multiplicador = Math.min(configNivel.maxCombo, state.comboActual);
+    const puntosGanados = Math.floor(puntosPorAcierto * multiplicador);
+
+    // CALCULAR SECUENCIAS COMPLETADAS ANTES DEL DISPATCH
+    const secuenciasCompletadas = state.secuenciaCompletada + 1;
+    
+    console.log('📊 CÁLCULO DE PUNTUACIÓN:', {
+      puntosPorAcierto,
+      comboActual: state.comboActual,
+      multiplicador,
+      puntosGanados,
+      puntuacionActual: state.puntuacion,
+      puntuacionDespues: state.puntuacion + puntosGanados,
+      secuenciasCompletadas,
+      totalRequeridas: configNivel.numSecuencias,
+      debeTerminar: secuenciasCompletadas >= configNivel.numSecuencias
+    });
+
+    // DISPATCH PARA ACTUALIZAR EL ESTADO
+    dispatch({
+      type: GAME_ACTIONS.COMPLETE_SEQUENCE,
+      payload: { 
+        puntos: puntosGanados
+      }
+    });
+
+    if (state.comboActual > 1) {
+      playSound('combo');
+      toast.success(`¡${state.comboActual}x Combo! +${puntosGanados} puntos`);
+    } else {
+      toast.success(`¡Secuencia correcta! +${puntosGanados} puntos`);
+    }
+
+    // VERIFICAR SI EL JUEGO DEBE TERMINAR
+    if (secuenciasCompletadas >= configNivel.numSecuencias) {
+      console.log('🎉 ¡JUEGO COMPLETADO! Terminando...');
+      playSound('nivelCompletado');
+      await finalizarJuego(true);
+    } else {
+      console.log(`➡️ Continuando... ${secuenciasCompletadas}/${configNivel.numSecuencias}`);
+      // USAR setTimeout CON VERIFICACIÓN ADICIONAL
+      setTimeout(() => {
+        if (!juegoFinalizandose.current) {
+          generarSecuencia();
+        }
+      }, 1000);
+    }
+  }, [state.comboActual, state.secuenciaCompletada, state.puntuacion, configNivel, playSound, finalizarJuego, generarSecuencia]);
+
+  const handleWordSelection = useCallback(async (palabra) => {
+    if (state.mostrandoSecuencia || juegoFinalizandose.current || state.juegoTerminado) return;
+
+    // VERIFICAR SI LA SECUENCIA ESTÁ COMPLETA ANTES DE AGREGAR LA PALABRA
+    const secuenciaCompleta = state.secuenciaUsuario.length + 1 === state.secuenciaActual.length;
+    
+    console.log('🎯 SELECCIONANDO PALABRA:', {
+      palabra: palabra.palabra,
+      secuenciaUsuarioActual: state.secuenciaUsuario.length,
+      secuenciaActualTotal: state.secuenciaActual.length,
+      secuenciaCompleta: secuenciaCompleta
+    });
+    
     dispatch({
       type: GAME_ACTIONS.SELECT_WORD,
       payload: { palabra }
@@ -372,74 +459,63 @@ function SecuenciasPalabras({ perfilNino, onScoreUpdate, onClose }) {
 
     playSound('acierto');
 
-    if (state.secuenciaUsuario.length + 1 === state.secuenciaActual.length) {
+    // VERIFICAR SI LA SECUENCIA ESTÁ COMPLETA DESPUÉS DE AGREGAR LA PALABRA
+    if (secuenciaCompleta) {
+      console.log('✅ SECUENCIA COMPLETA - LLAMANDO handleSequenceComplete');
       await handleSequenceComplete();
     }
-  }, [state, playSound]);
+  }, [state.secuenciaUsuario.length, state.secuenciaActual, state.mostrandoSecuencia, state.juegoTerminado, playSound, handleError, handleSequenceComplete]);
 
-  // Manejar secuencia completada
-  const handleSequenceComplete = async () => {
-    const puntosPorAcierto = configNivel.puntosBase;
-    const multiplicador = Math.min(configNivel.maxCombo, state.comboActual);
-    const puntosGanados = Math.floor(puntosPorAcierto * multiplicador);
-  
-    // Actualizar contador de secuencias
-    const nuevaSecuenciaCompletada = state.secuenciaCompletada + 1;
-  
-    dispatch({
-      type: GAME_ACTIONS.COMPLETE_SEQUENCE,
-      payload: { 
-        puntos: puntosGanados,
-        secuenciaCompletada: nuevaSecuenciaCompletada
-      }
-    });
-  
-    if (state.comboActual > 1) {
-      playSound('combo');
-      toast.success(`¡${state.comboActual}x Combo! +${puntosGanados} puntos`);
-    }
-  
-    // Verificar si se completó el juego
-    if (nuevaSecuenciaCompletada === configNivel.numSecuencias) {
-      playSound('nivelCompletado');
-      await finalizarJuego(true);
-    } else {
-      setTimeout(() => generarSecuencia(), 1000);
-    }
-  };
-
-  // Manejar error
-  const handleError = async () => {
-    dispatch({ type: GAME_ACTIONS.HANDLE_ERROR });
-
-    if (state.intentosRestantes <= 1) {
-      toast.error('¡Se acabaron los intentos!');
-      await finalizarJuego(false);
-      return;
-    }
-
-    toast.warning(`¡Secuencia incorrecta! Te quedan ${state.intentosRestantes - 1} intentos`);
-    setTimeout(() => generarSecuencia(), 1500);
-  };
-
-  // Iniciar juego
   const iniciarJuego = useCallback(() => {
-    setTiempoInicio(Date.now()); // ✅ AGREGADO: Iniciar medición de tiempo
+    console.log('🔄 REINICIANDO JUEGO...');
+    juegoFinalizandose.current = false; // RESETEAR FLAG
+    setShowTutorial(false); // RESETEAR TUTORIAL
+    setTiempoInicio(Date.now());
+    
+    // RESETEAR COMPLETAMENTE EL ESTADO
+    dispatch({
+      type: GAME_ACTIONS.RESET_GAME
+    });
+    
+    // INICIALIZAR EL NUEVO JUEGO
     dispatch({
       type: GAME_ACTIONS.INIT_GAME,
       payload: { intentosMaximos: configNivel.intentosMaximos }
     });
-    generarSecuencia();
+    
+    console.log('🚀 JUEGO INICIADO - Configuración:', {
+      numSecuencias: configNivel.numSecuencias,
+      numElementos: configNivel.numElementos,
+      nivel: configNivel.descripcion
+    });
   }, [configNivel, generarSecuencia]);
 
-  // Timer del juego
+  // --- FIX: Generar la primera secuencia tras reinicio ---
   useEffect(() => {
-    if (!state.tiempoRestante) return;
+    if (
+      state.juegoActivo &&
+      !state.juegoTerminado &&
+      state.secuenciaCompletada === 0 &&
+      !state.mostrandoSecuencia &&
+      !state.seleccionandoSecuencia &&
+      !juegoFinalizandose.current
+    ) {
+      generarSecuencia();
+    }
+    // eslint-disable-next-line
+  }, [state.juegoActivo, state.juegoTerminado, state.secuenciaCompletada]);
+
+  useEffect(() => {
+    if (!state.tiempoRestante || juegoFinalizandose.current || state.juegoTerminado) return;
     
     const timer = setInterval(() => {
+      if (juegoFinalizandose.current || state.juegoTerminado) {
+        clearInterval(timer);
+        return;
+      }
+      
       if (state.tiempoRestante <= 1) {
         clearInterval(timer);
-        // Si estamos mostrando secuencia, pasamos a selección
         if (state.mostrandoSecuencia) {
           dispatch({ 
             type: GAME_ACTIONS.HIDE_SEQUENCE,
@@ -459,9 +535,8 @@ function SecuenciasPalabras({ perfilNino, onScoreUpdate, onClose }) {
     }, 1000);
   
     return () => clearInterval(timer);
-  }, [state.tiempoRestante, configNivel.tiempoMemorizar]);
+  }, [state.tiempoRestante, configNivel.tiempoMemorizar, state.juegoTerminado]);
 
-  // Obtener opciones de palabras disponibles
   const getOpcionesPalabras = () => {
     const categoriasDisponibles = configNivel.categorias;
     return categoriasDisponibles.flatMap(categoria => 
@@ -488,15 +563,21 @@ function SecuenciasPalabras({ perfilNino, onScoreUpdate, onClose }) {
         isOpen={true}
         onClose={onClose}
         onRestart={iniciarJuego}
-        estado={state}
-        configNivel={configNivel}
+        victoria={state.victoria || false}
+        puntuacionBase={state.puntuacionBase}
+        bonificacion={state.bonificacion}
+        puntuacion={state.puntuacionFinal}
+        maxCombo={state.maxCombo}
+        secuenciasCompletadas={state.secuenciasCompletadas || state.secuenciaCompletada}
+        totalSecuencias={state.totalSecuencias || configNivel.numSecuencias}
+        porcentajeCorrecto={state.porcentajeCorrecto || 0}
+        estrellas={state.estrellas}
       />
     );
   }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-green-50 to-blue-50 p-4">
-      {/* Header del juego */}
       <div className="bg-white rounded-xl shadow-lg p-4 mb-6">
         <div className="flex justify-between items-center">
           <div className="flex items-center space-x-4">
@@ -514,14 +595,14 @@ function SecuenciasPalabras({ perfilNino, onScoreUpdate, onClose }) {
             <div className="text-center">
               <div className="text-sm text-gray-500">Secuencia</div>
               <div className="text-lg font-bold text-blue-600">
-                {state.secuenciaCompletada + 1}/{configNivel.numSecuencias}
+                {state.secuenciaCompletada}/{configNivel.numSecuencias}
               </div>
             </div>
             
             <div className="text-center">
               <div className="text-sm text-gray-500">Correctas</div>
               <div className="text-lg font-bold text-green-600">
-                {state.secuenciasCorrectas}
+                {state.secuenciaCompletada}
               </div>
             </div>
             
@@ -531,13 +612,7 @@ function SecuenciasPalabras({ perfilNino, onScoreUpdate, onClose }) {
                 {state.comboActual}x
               </div>
             </div>
-            
-            <div className="text-center">
-              <div className="text-sm text-gray-500">Puntos</div>
-              <div className="text-lg font-bold text-yellow-600">
-                {state.puntuacion}
-              </div>
-            </div>
+
             
             {state.tiempoRestante !== null && (
               <div className="text-center">
@@ -551,7 +626,6 @@ function SecuenciasPalabras({ perfilNino, onScoreUpdate, onClose }) {
           </div>
         </div>
         
-        {/* Barra de progreso */}
         <div className="mt-4">
           <div className="w-full h-2 bg-gray-200 rounded-full">
             <div
@@ -562,10 +636,8 @@ function SecuenciasPalabras({ perfilNino, onScoreUpdate, onClose }) {
         </div>
       </div>
 
-      {/* Área del juego */}
       <div className="bg-white rounded-xl shadow-lg p-6">
-        {/* Área de secuencia */}
-        {state.mostrandoSecuencia && (
+        {state.mostrandoSecuencia && !state.juegoTerminado && (
           <div className="text-center mb-8">
             <h3 className="text-xl font-bold mb-4">Memoriza esta secuencia:</h3>
             <div className="flex justify-center space-x-4">
@@ -582,14 +654,12 @@ function SecuenciasPalabras({ perfilNino, onScoreUpdate, onClose }) {
           </div>
         )}
 
-        {/* Área de selección */}
-        {state.seleccionandoSecuencia && (
+        {state.seleccionandoSecuencia && !state.juegoTerminado && (
           <div className="text-center">
             <h3 className="text-xl font-bold mb-4">
               Repite la secuencia ({state.secuenciaUsuario.length + 1}/{state.secuenciaActual.length}):
             </h3>
             
-            {/* Secuencia del usuario */}
             <div className="flex justify-center space-x-2 mb-6">
               {state.secuenciaUsuario.map((palabra, index) => (
                 <div
@@ -609,7 +679,6 @@ function SecuenciasPalabras({ perfilNino, onScoreUpdate, onClose }) {
               ))}
             </div>
 
-            {/* Opciones disponibles */}
             <div className="grid grid-cols-4 md:grid-cols-6 gap-3">
               {getOpcionesPalabras().map((palabra) => (
                 <button
@@ -625,8 +694,7 @@ function SecuenciasPalabras({ perfilNino, onScoreUpdate, onClose }) {
           </div>
         )}
 
-        {/* Estado de espera */}
-        {!state.mostrandoSecuencia && !state.seleccionandoSecuencia && state.juegoActivo && (
+        {!state.mostrandoSecuencia && !state.seleccionandoSecuencia && state.juegoActivo && !state.juegoTerminado && (
           <div className="text-center py-12">
             <div className="text-4xl mb-4">🎯</div>
             <h3 className="text-xl font-bold text-gray-700">
