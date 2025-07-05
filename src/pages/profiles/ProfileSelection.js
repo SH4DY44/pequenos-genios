@@ -256,7 +256,7 @@ function ProfileSelection() {
 
   return (
     <div className="min-h-screen bg-[var(--primary-yellow)]">
-      <nav className="bg-[var(--primary-blue)] p-4">
+      <nav className="bg-gradient-to-r from-blue-600 to-purple-700 text-white p-4">
         <div className="flex items-center justify-between w-full">
           <Link to="/profile-selection" className="flex items-center">
             <img src={banner} alt="Pequeños Genios" className="h-12" />
@@ -265,7 +265,7 @@ function ProfileSelection() {
             </span>
           </Link>
 
-          <div className="relative">
+          <div className="flex items-center space-x-6">
             <NotificationIndicator
               onOpenCenter={() => navigate("/notificaciones")}
             />
@@ -335,6 +335,11 @@ function ProfileSelection() {
                       {profiles.map((profile) => (
                         <div
                           key={profile.id}
+                          className={`bg-gray-50 p-6 rounded-lg transition-all relative flex items-start gap-6 ${
+                            profile.evaluacionFinalizada
+                              ? "hover:shadow-lg hover:border-[var(--primary-blue)] hover:border cursor-pointer group"
+                              : ""
+                          }`}
                           onClick={() => {
                             if (profile.evaluacionFinalizada) {
                               navigate("/console", {
@@ -342,20 +347,11 @@ function ProfileSelection() {
                               });
                             }
                           }}
-                          className={`bg-gray-50 p-6 rounded-lg transition-all relative ${
-                            profile.evaluacionFinalizada
-                              ? "hover:shadow-lg hover:border-[var(--primary-blue)] hover:border cursor-pointer group"
-                              : ""
-                          }`}
                         >
-                          <div className="flex items-start space-x-6">
+                          {/* Avatar */}
+                          <div className="flex flex-col items-center min-w-[64px]">
                             <div
-                              className={`w-16 h-16 rounded-full flex items-center justify-center text-xl font-bold
-                   ${
-                     profile.evaluacionFinalizada
-                       ? "group-hover:scale-105 transition-transform"
-                       : ""
-                   }`}
+                              className="w-16 h-16 rounded-full flex items-center justify-center text-xl font-bold mb-2"
                               style={{
                                 backgroundColor:
                                   profile.avatar?.color || "#E5E7EB",
@@ -366,61 +362,63 @@ function ProfileSelection() {
                                 profile.fullName?.charAt(0) ||
                                 "?"}
                             </div>
-                            <div className="flex-1 space-y-2">
-                              <h4 className="font-bold text-lg">
-                                {profile.fullName}
-                              </h4>
-                              <p className="text-gray-600 text-sm">
-                                Edad: {calcularEdad(profile.birthDate)} años
-                              </p>
-                              <p className="text-gray-600 text-sm">
-                                Diagnóstico: {profile.primaryDiagnosis}
-                              </p>
-
-                              <div className="flex items-center justify-between mt-4">
-                                <div>
-                                  {!profile.evaluacionFinalizada ? (
-                                    <button
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        navigate("/evaluation", {
-                                          state: { profileId: profile.id },
-                                        });
-                                      }}
-                                      className="px-4 py-2 bg-[var(--primary-blue)] text-white rounded-lg hover:opacity-90"
-                                    >
-                                      Realizar Evaluación Inicial
-                                    </button>
-                                  ) : (
-                                    <span className="text-[var(--primary-blue)] flex items-center gap-2 text-sm font-medium opacity-0 group-hover:opacity-100 transition-all">
-                                      <span>Acceder a la consola</span>
-                                      {/*<span className="text-lg">→</span>*/}
-                                    </span>
-                                  )}
-                                </div>
-
-                                <div>
-                                  <button
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      setSelectedProfile(profile);
-                                      setShowEditModal(true);
-                                    }}
-                                    className="px-4 py-2 bg-gray-100 text-[var(--primary-blue)] rounded-lg 
-                     hover:bg-[var(--primary-blue)] hover:text-white transition-all ml-4"
-                                  >
-                                    Editar
-                                  </button>
-                                </div>
-                              </div>
+                          </div>
+                          {/* Info principal y acciones */}
+                          <div className="flex-1 flex flex-col justify-between min-w-0">
+                            <div className="mb-2 flex items-center gap-4">
+                              <h4 className="font-bold text-lg truncate">{profile.fullName}</h4>
                             </div>
-
-                            {}
+                            <div className="flex flex-wrap gap-4 text-gray-600 text-sm mt-1">
+                              <span>Edad: {calcularEdad(profile.birthDate)} años</span>
+                              <span>Diagnóstico: {profile.primaryDiagnosis}</span>
+                            </div>
+                            <div className="flex flex-wrap gap-2 mt-4">
+                              {!profile.evaluacionFinalizada ? (
+                                <button
+                                  onClick={e => {
+                                    e.stopPropagation();
+                                    navigate("/evaluation", {
+                                      state: { profileId: profile.id },
+                                    });
+                                  }}
+                                  className="px-4 py-2 bg-[var(--primary-blue)] text-white rounded-lg hover:opacity-90"
+                                >
+                                  Realizar Evaluación Inicial
+                                </button>
+                              ) : (
+                                <button
+                                  onClick={e => {
+                                    e.stopPropagation();
+                                    navigate("/evaluation", {
+                                      state: { profileId: profile.id },
+                                    });
+                                  }}
+                                  className="px-4 py-2 bg-green-100 text-green-700 rounded-lg hover:bg-green-200 transition-all"
+                                >
+                                  Nueva Evaluación
+                                </button>
+                              )}
+                              <button
+                                onClick={e => {
+                                  e.stopPropagation();
+                                  setSelectedProfile(profile);
+                                  setShowEditModal(true);
+                                }}
+                                className="px-4 py-2 bg-gray-100 text-[var(--primary-blue)] rounded-lg hover:bg-[var(--primary-blue)] hover:text-white transition-all"
+                              >
+                                Editar
+                              </button>
+                            </div>
                             {profile.evaluacionFinalizada && (
-                              <div className="absolute right-4 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-all">
-                                <div className="text-[var(--primary-blue)] text-2xl">
-                                  →
-                                </div>
+                              <div className="w-full mt-3">
+                                <span className="block mx-auto text-[var(--primary-blue)] text-xs font-medium opacity-0 group-hover:opacity-100 transition-all cursor-pointer"
+                                  onClick={e => {
+                                    e.stopPropagation();
+                                    navigate("/console", { state: { profileId: profile.id } });
+                                  }}
+                                >
+                                  Acceder a la consola
+                                </span>
                               </div>
                             )}
                           </div>

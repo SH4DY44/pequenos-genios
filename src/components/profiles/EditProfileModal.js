@@ -283,19 +283,6 @@ function EditProfileModal({ isOpen, onClose, onSubmit, onDelete, profile , onEva
                 </button>
                 
                 <div className="space-x-3">
-                  {profile.evaluacionFinalizada && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        onClose();
-                        onEvaluate(profile.id);
-                      }}
-                      className="px-4 py-2 bg-[var(--primary-blue)] text-white rounded-lg hover:opacity-90"
-                    >
-                      Nueva Evaluación
-                    </button>
-                  )}
-
                   <button
                     type="button"
                     onClick={onClose}

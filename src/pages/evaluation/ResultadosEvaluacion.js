@@ -134,22 +134,12 @@ function ResultadosEvaluacion() {
         </div>
 
         {/* Botones de Acción */}
-        <div className="flex justify-center gap-4">
+        <div className="flex justify-center">
           <button
             onClick={() => navigate("/profile-selection")}
-            className="px-6 py-2 border-2 border-gray-300 rounded-lg hover:bg-gray-100"
-          >
-            Volver a Perfiles
-          </button>
-          <button
-            onClick={() =>
-              navigate("/console", {
-                state: { profileId: location.state.profileId },
-              })
-            }
             className="px-8 py-3 bg-[var(--primary-blue)] text-white rounded-lg hover:opacity-90 font-bold"
           >
-            Comenzar Actividades
+            Volver a Perfiles
           </button>
         </div>
       </div>
