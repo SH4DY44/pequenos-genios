@@ -6,6 +6,7 @@ import AchievementCard from './AchievementCard';
 import RewardsStore from './RewardsStore';
 import InventoryDisplay from './InventoryDisplay';
 import ProgressBars from './ProgressBars';
+import LogrosSection from './LogrosSection'; // ✅ NUEVO IMPORT
 
 function RewardsDashboard({ profileId, perfilNino }) {
   const [estadisticas, setEstadisticas] = useState(null);
@@ -217,19 +218,47 @@ function ResumenRecompensas({ estadisticas, perfilNino, onRecargar }) {
         
         {estadisticas?.proximosLogros?.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {estadisticas.proximosLogros.map(logro => (
-              <ProgressBars 
-                key={logro.id}
-                logro={logro}
-                className="bg-gray-50 border border-gray-200 rounded-lg p-4"
-              />
+            {estadisticas.proximosLogros.slice(0, 4).map(logro => (
+              <div key={logro.id} className="bg-gray-50 rounded-lg p-4">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-2xl">{logro.icono}</span>
+                  <span className="text-sm text-gray-500 capitalize">{logro.rareza}</span>
+                </div>
+                <h4 className="font-bold text-gray-800 mb-1">{logro.nombre}</h4>
+                <p className="text-sm text-gray-600 mb-3">{logro.descripcion}</p>
+                
+                <div className="flex justify-between text-xs text-gray-600 mb-1">
+                  <span>Progreso</span>
+                  <span>{Math.round(logro.progreso)}%</span>
+                </div>
+                <div className="bg-gray-200 rounded-full h-2">
+                  <div 
+                    className="bg-blue-500 h-2 rounded-full transition-all duration-500"
+                    style={{ width: `${logro.progreso}%` }}
+                  />
+                </div>
+                
+                {logro.recompensa && (
+                  <div className="flex items-center space-x-2 mt-3">
+                    {logro.recompensa.puntos > 0 && (
+                      <span className="bg-yellow-100 text-yellow-800 px-2 py-1 rounded text-xs">
+                        +{logro.recompensa.puntos} pts
+                      </span>
+                    )}
+                    {logro.recompensa.estrellas > 0 && (
+                      <span className="bg-purple-100 text-purple-800 px-2 py-1 rounded text-xs">
+                        +{logro.recompensa.estrellas} ⭐
+                      </span>
+                    )}
+                  </div>
+                )}
+              </div>
             ))}
           </div>
         ) : (
-          <div className="text-center py-12 bg-gray-50 rounded-lg">
-            <div className="text-6xl mb-4">🎯</div>
+          <div className="text-center py-8 bg-gray-50 rounded-lg">
             <h4 className="text-lg font-medium text-gray-700 mb-2">
-              ¡Todos los logros desbloqueados!
+              ¡Increíble trabajo!
             </h4>
             <p className="text-gray-500">
               Has completado todos los logros disponibles. ¡Increíble trabajo!
@@ -282,28 +311,6 @@ function ResumenRecompensas({ estadisticas, perfilNino, onRecargar }) {
   );
 }
 
-// Componente de sección de logros
-function LogrosSection({ profileId, estadisticas, perfilNino }) {
-  return (
-    <div>
-      <h3 className="text-xl font-bold text-gray-800 mb-6">
-        Todos tus Logros ({estadisticas?.totalLogros || 0})
-      </h3>
-      
-      {/* Aquí iría la lista completa de logros */}
-      <div className="text-center py-12 bg-gray-50 rounded-lg">
-        <div className="text-6xl mb-4">🏆</div>
-        <h4 className="text-lg font-medium text-gray-700 mb-2">
-          Sección de Logros
-        </h4>
-        <p className="text-gray-500">
-          Componente de logros detallados en desarrollo...
-        </p>
-      </div>
-    </div>
-  );
-}
-
 // Modal para mostrar nuevos logros
 function NuevosLogrosModal({ logros, onClose }) {
   return (
@@ -314,8 +321,8 @@ function NuevosLogrosModal({ logros, onClose }) {
           ¡Nuevo{logros.length > 1 ? 's' : ''} Logro{logros.length > 1 ? 's' : ''}!
         </h2>
         
-        <div className="space-y-4 mb-6">
-          {logros.map(logro => (
+        <div className="space-y-4 mb-6 max-h-60 overflow-y-auto">
+          {logros.slice(0, 3).map(logro => (
             <div key={logro.id} className="bg-gradient-to-r from-yellow-50 to-orange-50 rounded-lg p-4">
               <div className="text-3xl mb-2">{logro.icono}</div>
               <h3 className="font-bold text-gray-800">{logro.nombre}</h3>
@@ -336,14 +343,31 @@ function NuevosLogrosModal({ logros, onClose }) {
               )}
             </div>
           ))}
+          {logros.length > 3 && (
+            <div className="text-sm text-gray-500">
+              Y {logros.length - 3} logros más...
+            </div>
+          )}
         </div>
         
-        <button
-          onClick={onClose}
-          className="bg-gradient-to-r from-blue-500 to-purple-600 text-white px-8 py-3 rounded-lg font-bold hover:from-blue-600 hover:to-purple-700 transition-all"
-        >
-          ¡Genial!
-        </button>
+        <div className="flex space-x-3">
+          <button
+            onClick={() => {
+              onClose();
+              // Cambiar a la sección de logros
+              document.querySelector('[data-seccion="logros"]')?.click();
+            }}
+            className="flex-1 bg-gradient-to-r from-blue-500 to-purple-600 text-white px-6 py-3 rounded-lg font-bold hover:from-blue-600 hover:to-purple-700 transition-all"
+          >
+            Ver Logros
+          </button>
+          <button
+            onClick={onClose}
+            className="px-6 py-3 bg-gray-200 text-gray-700 rounded-lg font-bold hover:bg-gray-300 transition-all"
+          >
+            Continuar
+          </button>
+        </div>
       </div>
     </div>
   );

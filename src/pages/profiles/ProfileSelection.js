@@ -415,7 +415,7 @@ function ProfileSelection() {
                               </div>
                             </div>
 
-                            {/* Indicador visual de perfil activo */}
+                            {}
                             {profile.evaluacionFinalizada && (
                               <div className="absolute right-4 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-all">
                                 <div className="text-[var(--primary-blue)] text-2xl">
