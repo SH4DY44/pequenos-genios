@@ -12,6 +12,8 @@ import {
   serverTimestamp 
 } from 'firebase/firestore';
 import { db, auth } from '../config/firebase';
+import emailService from './emailService';
+import { TutorService } from './tutorService';
 
 export class NotificationService {
   
@@ -573,6 +575,276 @@ export class NotificationService {
     } catch (error) {
       console.error('Error limpiando notificaciones antiguas:', error);
       throw error;
+    }
+  }
+
+  /**
+   * Enviar notificación por email
+   * @param {Object} notification - Objeto de notificación
+   * @returns {Promise<void>}
+   */
+  static async enviarNotificacionEmail(notification) {
+    try {
+      if (!notification.tutorId || !notification.titulo || !notification.mensaje) {
+        throw new Error('Datos de notificación incompletos para enviar email');
+      }
+
+      // Obtener datos del tutor
+      const tutor = await TutorService.obtenerTutorPorId(notification.tutorId);
+      if (!tutor || !tutor.email) {
+        throw new Error('Tutor no encontrado o sin email');
+      }
+
+      // Enviar email
+      await emailService.enviarEmail({
+        to: tutor.email,
+        subject: notification.titulo,
+        text: notification.mensaje
+      });
+
+      console.log('Notificación por email enviada a:', tutor.email);
+    } catch (error) {
+      console.error('Error enviando notificación por email:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Enviar notificación por correo electrónico
+   * @param {string} tutorId - ID del tutor
+   * @param {string} tipo - Tipo de notificación
+   * @param {Object} datos - Datos de la notificación
+   * @returns {Promise<Object>} - Resultado del envío
+   */
+  static async enviarPorCorreo(tutorId, tipo, datos) {
+    try {
+      // Obtener información del tutor
+      const infoTutor = await TutorService.obtenerInfoContacto(tutorId);
+      
+      if (!infoTutor.email) {
+        throw new Error('No hay email registrado para el tutor');
+      }
+
+      // Enviar correo usando el servicio
+      const resultado = await emailService.enviarCorreo(
+        infoTutor.email,
+        tipo,
+        {
+          ...datos,
+          nombreTutor: infoTutor.nombre || 'Tutor'
+        }
+      );
+
+      console.log('Correo enviado exitosamente:', resultado);
+      return resultado;
+    } catch (error) {
+      console.error('Error enviando correo:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Enviar notificación completa (Firebase + Email)
+   * @param {string} tutorId - ID del tutor
+   * @param {string} profileId - ID del perfil del niño
+   * @param {string} tipo - Tipo de notificación
+   * @param {Object} datos - Datos de la notificación
+   * @param {Object} opciones - Opciones adicionales
+   * @returns {Promise<Object>} - Resultado del envío
+   */
+  static async enviarNotificacionCompleta(tutorId, profileId, tipo, datos, opciones = {}) {
+    const resultados = {
+      firebase: null,
+      email: null
+    };
+
+    try {
+      // 1. Crear notificación en Firebase
+      resultados.firebase = await this.crearNotificacion({
+        tutorId,
+        profileId,
+        tipo,
+        titulo: datos.titulo,
+        mensaje: datos.mensaje,
+        datos: datos.datos || {},
+        prioridad: datos.prioridad || 'normal'
+      });
+
+      // 2. Enviar por correo si está habilitado
+      if (opciones.enviarEmail !== false) {
+        try {
+          resultados.email = await this.enviarPorCorreo(tutorId, tipo, datos);
+        } catch (emailError) {
+          console.warn('Error enviando email, pero notificación Firebase creada:', emailError);
+          // No lanzar error, la notificación en Firebase ya fue creada
+        }
+      }
+
+      return {
+        success: true,
+        resultados
+      };
+
+    } catch (error) {
+      console.error('Error enviando notificación completa:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Métodos de conveniencia para diferentes tipos de notificaciones con email
+   */
+
+  /**
+   * Notificar actividad pendiente con email
+   */
+  static async notificarActividadPendienteConEmail(tutorId, profileId, datos = {}) {
+    return await this.enviarNotificacionCompleta(
+      tutorId,
+      profileId,
+      'actividad_pendiente',
+      {
+        titulo: '🎯 Actividad pendiente',
+        mensaje: `${datos.nombreNino || 'Tu pequeño'} no ha realizado actividades recientemente.`,
+        datos: {
+          nombreNino: datos.nombreNino,
+          horasSinActividad: datos.horasSinActividad || 24,
+          ultimaActividad: datos.ultimaActividad
+        },
+        prioridad: 'normal'
+      },
+      { enviarEmail: true }
+    );
+  }
+
+  /**
+   * Notificar logro alcanzado con email
+   */
+  static async notificarLogroConEmail(tutorId, profileId, datos = {}) {
+    return await this.enviarNotificacionCompleta(
+      tutorId,
+      profileId,
+      'logro_alcanzado',
+      {
+        titulo: '🏆 ¡Nuevo logro!',
+        mensaje: `${datos.nombreNino || 'Tu pequeño'} ha desbloqueado: ${datos.logro}`,
+        datos: {
+          nombreNino: datos.nombreNino,
+          logro: datos.logro,
+          puntos: datos.puntos || 0,
+          descripcion: datos.descripcion
+        },
+        prioridad: 'alta'
+      },
+      { enviarEmail: true }
+    );
+  }
+
+  /**
+   * Enviar resumen semanal con email
+   */
+  static async enviarResumenSemanalConEmail(tutorId, profileId, estadisticas = {}) {
+    return await this.enviarNotificacionCompleta(
+      tutorId,
+      profileId,
+      'resumen_semanal',
+      {
+        titulo: '📊 Resumen semanal',
+        mensaje: `Resumen del progreso de ${estadisticas.nombreNino || 'tu pequeño'} esta semana.`,
+        datos: {
+          nombreNino: estadisticas.nombreNino,
+          actividadesCompletadas: estadisticas.actividadesCompletadas || 0,
+          tiempoTotal: estadisticas.tiempoTotal || 0,
+          puntosTotales: estadisticas.puntosTotales || 0,
+          racha: estadisticas.racha || 0,
+          semana: estadisticas.semana || 'esta semana'
+        },
+        prioridad: 'baja'
+      },
+      { enviarEmail: true }
+    );
+  }
+
+  /**
+   * Enviar correo de bienvenida
+   */
+  static async enviarBienvenida(tutorId, profileId, datos = {}) {
+    return await this.enviarNotificacionCompleta(
+      tutorId,
+      profileId,
+      'bienvenida',
+      {
+        titulo: '🎉 ¡Bienvenido a Pequeños Genios!',
+        mensaje: `¡Hola ${datos.nombreTutor || 'Tutor'}! Bienvenido a nuestra plataforma.`,
+        datos: {
+          nombreTutor: datos.nombreTutor,
+          nombreNino: datos.nombreNino
+        },
+        prioridad: 'normal'
+      },
+      { enviarEmail: true }
+    );
+  }
+
+  /**
+   * Notificar recompensa disponible con email
+   */
+  static async notificarRecompensaConEmail(tutorId, profileId, datos = {}) {
+    return await this.enviarNotificacionCompleta(
+      tutorId,
+      profileId,
+      'recompensa_disponible',
+      {
+        titulo: '🎁 Recompensa disponible',
+        mensaje: `${datos.nombreNino || 'Tu pequeño'} puede reclamar una recompensa.`,
+        datos: {
+          nombreNino: datos.nombreNino,
+          recompensa: datos.recompensa,
+          puntosRequeridos: datos.puntosRequeridos || 0,
+          puntosActuales: datos.puntosActuales || 0
+        },
+        prioridad: 'normal'
+      },
+      { enviarEmail: true }
+    );
+  }
+
+  /**
+   * Notificar sesión completada con email
+   */
+  static async notificarSesionCompletadaConEmail(tutorId, profileId, estadisticas = {}) {
+    return await this.enviarNotificacionCompleta(
+      tutorId,
+      profileId,
+      'sesion_completada',
+      {
+        titulo: '✅ Sesión completada',
+        mensaje: `${estadisticas.nombreNino || 'Tu pequeño'} ha completado una sesión de práctica.`,
+        datos: {
+          nombreNino: estadisticas.nombreNino,
+          duracion: estadisticas.duracion || 0,
+          actividades: estadisticas.actividades || 0,
+          puntos: estadisticas.puntos || 0,
+          precision: estadisticas.precision || 0
+        },
+        prioridad: 'baja'
+      },
+      { enviarEmail: true }
+    );
+  }
+
+  /**
+   * Verificar estado del servicio de email
+   */
+  static async verificarEstadoEmail() {
+    try {
+      return await emailService.verificarEstado();
+    } catch (error) {
+      console.error('Error verificando estado del servicio de email:', error);
+      return {
+        estado: 'ERROR',
+        error: error.message
+      };
     }
   }
 }

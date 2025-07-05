@@ -1,6 +1,7 @@
 // src/hooks/useNotificationAutomation.js
 import { useEffect, useCallback, useState, useRef } from 'react';
-import { auth } from '../config/firebase';
+import { auth, db } from '../config/firebase';
+import { collection, query, where, getDocs } from 'firebase/firestore';
 import { NotificationScheduler } from '../services/notificationScheduler';
 
 export function useNotificationAutomation() {
@@ -9,122 +10,23 @@ export function useNotificationAutomation() {
   const intervalosRef = useRef({});
   const userRef = useRef(null);
 
-  // ✅ CORREGIDO: Solo monitoreo ligero apropiado para frontend
-  const iniciarMonitoreoLigero = useCallback(() => {
-    // ✅ VALIDACIÓN: Solo si hay usuario autenticado
-    if (!auth.currentUser) {
-      console.log('⚠️ No hay usuario autenticado, saltando monitoreo');
-      return null;
-    }
-
-    // ✅ MODO DESARROLLO: Comportamiento diferente
-    if (process.env.NODE_ENV === 'development') {
-      console.log('🧪 Monitoreo en modo desarrollo - intervalos reducidos');
-    }
-
-    console.log('🤖 Iniciando monitoreo ligero para usuario:', auth.currentUser.uid);
-    setIsMonitoring(true);
-    setLastCheck(new Date());
-
-    // ✅ OPTIMIZADO: Intervalos más conservadores y apropiados para frontend
-    const intervalos = {
-      // ✅ CORREGIDO: Solo verificar logros cuando el usuario está activo (cada 5 minutos)
-      logrosEnTiempoReal: setInterval(() => {
-        if (auth.currentUser && document.visibilityState === 'visible') {
-          console.log('🏆 Verificando logros en tiempo real...');
-          // Solo verificar logros para perfiles activos del usuario actual
-          verificarLogrosUsuarioActual();
-        }
-      }, process.env.NODE_ENV === 'development' ? 30000 : 300000), // 30s dev, 5min prod
-
-      // ✅ AGREGADO: Verificación periódica de actividad del usuario (cada 30 minutos)
-      actividadUsuario: setInterval(() => {
-        if (auth.currentUser && document.visibilityState === 'visible') {
-          console.log('👤 Verificando actividad del usuario actual...');
-          verificarActividadUsuarioActual();
-        }
-      }, process.env.NODE_ENV === 'development' ? 60000 : 1800000), // 1min dev, 30min prod
-
-      // ✅ AGREGADO: Limpieza periódica de recursos (cada hora)
-      limpieza: setInterval(() => {
-        console.log('🧹 Ejecutando limpieza de recursos...');
-        limpiarRecursosLocales();
-      }, 3600000) // 1 hora
-    };
-
-    intervalosRef.current = intervalos;
-    console.log('✅ Monitoreo ligero iniciado');
-    return intervalos;
-  }, []);
-
-  // ✅ AGREGADO: Verificar logros solo para el usuario actual
-  const verificarLogrosUsuarioActual = useCallback(async () => {
+  // ✅ CORREGIDO: Obtener perfiles del usuario actual usando Firebase
+  const obtenerPerfilesUsuario = useCallback(async (userId) => {
     try {
-      if (!auth.currentUser) return;
-
-      // Obtener perfiles del usuario actual desde localStorage o context
-      const perfilesActivos = await obtenerPerfilesActivos();
+      const q = query(
+        collection(db, 'childProfiles'),
+        where('tutorId', '==', userId)
+      );
       
-      for (const perfil of perfilesActivos) {
-        await NotificationScheduler.monitorearLogrosEnTiempoReal(perfil.id);
-      }
-      
-      setLastCheck(new Date());
+      const snapshot = await getDocs(q);
+      return snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+        nombre: doc.data().fullName // Normalizar el nombre
+      }));
     } catch (error) {
-      console.error('Error verificando logros en tiempo real:', error);
-    }
-  }, []);
-
-  // ✅ AGREGADO: Verificar actividad del usuario actual
-  const verificarActividadUsuarioActual = useCallback(async () => {
-    try {
-      if (!auth.currentUser) return;
-
-      // Solo enviar recordatorios si el usuario ha estado inactivo
-      const tiempoInactivo = calcularTiempoInactividad();
-      
-      if (tiempoInactivo > 24) { // 24 horas sin actividad
-        console.log(`⏰ Usuario inactivo por ${tiempoInactivo} horas`);
-        // Aquí podrías triggear una notificación local o in-app
-        mostrarRecordatorioLocal();
-      }
-    } catch (error) {
-      console.error('Error verificando actividad del usuario:', error);
-    }
-  }, []);
-
-  // ✅ AGREGADO: Obtener perfiles activos (desde context o localStorage)
-  const obtenerPerfilesActivos = useCallback(async () => {
-    // Esta función debería obtener los perfiles del usuario actual
-    // desde el context de la aplicación o localStorage para evitar queries innecesarias
-    try {
-      // Implementación simplificada - en producción usar context o state management
-      const perfilesGuardados = localStorage.getItem(`perfiles_${auth.currentUser?.uid}`);
-      return perfilesGuardados ? JSON.parse(perfilesGuardados) : [];
-    } catch (error) {
-      console.error('Error obteniendo perfiles activos:', error);
+      console.error('Error obteniendo perfiles:', error);
       return [];
-    }
-  }, []);
-
-  // ✅ AGREGADO: Calcular tiempo de inactividad
-  const calcularTiempoInactividad = useCallback(() => {
-    const ultimaActividad = localStorage.getItem(`ultima_actividad_${auth.currentUser?.uid}`);
-    if (!ultimaActividad) return 0;
-    
-    const ahora = new Date();
-    const ultima = new Date(ultimaActividad);
-    return Math.floor((ahora - ultima) / (1000 * 60 * 60)); // Horas
-  }, []);
-
-  // ✅ AGREGADO: Mostrar recordatorio local (in-app)
-  const mostrarRecordatorioLocal = useCallback(() => {
-    // Mostrar notificación in-app en lugar de crear notificación en DB
-    if ('Notification' in window && Notification.permission === 'granted') {
-      new Notification('Pequeños Genios', {
-        body: '¡Es hora de que tus pequeños practiquen!',
-        icon: '/banner.ico'
-      });
     }
   }, []);
 
@@ -154,6 +56,97 @@ export function useNotificationAutomation() {
     } catch (error) {
       console.error('Error en limpieza de recursos:', error);
     }
+  }, []);
+
+  // ✅ CORREGIDO: Función para verificar logros usando el NotificationScheduler existente
+  const verificarLogrosUsuarioActual = useCallback(async () => {
+    try {
+      if (!auth.currentUser) return;
+
+      // Obtener perfiles del usuario actual
+      const perfiles = await obtenerPerfilesUsuario(auth.currentUser.uid);
+      
+      for (const perfil of perfiles) {
+        // Usar el NotificationScheduler existente para verificar logros
+        await NotificationScheduler.verificarLogros(perfil.id, perfil);
+      }
+    } catch (error) {
+      console.error('Error verificando logros:', error);
+    }
+  }, [obtenerPerfilesUsuario]);
+
+  // ✅ CORREGIDO: Función para verificar actividad usando el NotificationScheduler existente
+  const verificarActividadUsuarioActual = useCallback(async () => {
+    try {
+      if (!auth.currentUser) return;
+
+      // Obtener perfiles del usuario actual
+      const perfiles = await obtenerPerfilesUsuario(auth.currentUser.uid);
+      
+      for (const perfil of perfiles) {
+        // Usar el NotificationScheduler existente para verificar actividad
+        await NotificationScheduler.verificarActividadPerfil(perfil.id, perfil);
+      }
+    } catch (error) {
+      console.error('Error verificando actividad:', error);
+    }
+  }, [obtenerPerfilesUsuario]);
+
+  // ✅ CORREGIDO: Solo monitoreo ligero apropiado para frontend
+  const iniciarMonitoreoLigero = useCallback(() => {
+    // ✅ VALIDACIÓN: Solo si hay usuario autenticado
+    if (!auth.currentUser) {
+      console.log('⚠️ No hay usuario autenticado, saltando monitoreo');
+      return null;
+    }
+
+    // ✅ MODO DESARROLLO: Comportamiento diferente
+    if (process.env.NODE_ENV === 'development') {
+      console.log('🧪 Monitoreo en modo desarrollo - intervalos reducidos');
+    }
+
+    console.log('🤖 Iniciando monitoreo ligero para usuario:', auth.currentUser.uid);
+    setIsMonitoring(true);
+    setLastCheck(new Date());
+
+    // ✅ OPTIMIZADO: Intervalos más conservadores y apropiados para frontend
+    const intervalos = {
+      // ✅ CORREGIDO: Solo verificar logros cuando el usuario está activo (cada 5 minutos)
+      logrosEnTiempoReal: setInterval(() => {
+        if (auth.currentUser && document.visibilityState === 'visible') {
+          console.log('🏆 Verificando logros en tiempo real...');
+          verificarLogrosUsuarioActual();
+        }
+      }, process.env.NODE_ENV === 'development' ? 30000 : 300000), // 30s dev, 5min prod
+
+      // ✅ AGREGADO: Verificación periódica de actividad del usuario (cada 30 minutos)
+      actividadUsuario: setInterval(() => {
+        if (auth.currentUser && document.visibilityState === 'visible') {
+          console.log('👤 Verificando actividad del usuario actual...');
+          verificarActividadUsuarioActual();
+        }
+      }, process.env.NODE_ENV === 'development' ? 60000 : 1800000), // 1min dev, 30min prod
+
+      // ✅ AGREGADO: Limpieza periódica de recursos (cada hora)
+      limpieza: setInterval(() => {
+        console.log('🧹 Ejecutando limpieza de recursos...');
+        limpiarRecursosLocales();
+      }, 3600000) // 1 hora
+    };
+
+    intervalosRef.current = intervalos;
+    console.log('✅ Monitoreo ligero iniciado');
+    return intervalos;
+  }, [verificarLogrosUsuarioActual, verificarActividadUsuarioActual, limpiarRecursosLocales]);
+
+  // ✅ AGREGADO: Calcular tiempo de inactividad
+  const calcularTiempoInactividad = useCallback(() => {
+    const ultimaActividad = localStorage.getItem(`ultima_actividad_${auth.currentUser?.uid}`);
+    if (!ultimaActividad) return 0;
+    
+    const ahora = new Date();
+    const ultima = new Date(ultimaActividad);
+    return Math.floor((ahora - ultima) / (1000 * 60 * 60)); // Horas
   }, []);
 
   // ✅ MEJORADO: Limpiar intervalos con mejor manejo
@@ -197,15 +190,13 @@ export function useNotificationAutomation() {
 
   // ✅ CORREGIDO: useEffect principal con mejor lógica
   useEffect(() => {
-    let intervalos = null;
-
     // ✅ OPTIMIZACIÓN: Solo iniciar si el usuario está autenticado
     const unsubscribe = auth.onAuthStateChanged((user) => {
       if (user) {
         userRef.current = user;
         // Pequeña pausa para asegurar que la UI está lista
         setTimeout(() => {
-          intervalos = iniciarMonitoreoLigero();
+          iniciarMonitoreoLigero();
         }, 2000);
       } else {
         userRef.current = null;
@@ -227,7 +218,7 @@ export function useNotificationAutomation() {
         registrarActividad();
         // Verificar si necesitamos reanudar el monitoreo
         if (!isMonitoring) {
-          intervalos = iniciarMonitoreoLigero();
+          iniciarMonitoreoLigero();
         }
       }
     };
