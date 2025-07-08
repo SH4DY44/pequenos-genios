@@ -24,10 +24,18 @@ class EmailService {
         pool: true,
         maxConnections: 5,
         maxMessages: 100,
-        rateLimit: 10 // 10 correos por segundo máximo
+        rateLimit: 10, // 10 correos por segundo máximo
+        secure: true, // Usar SSL/TLS
+        port: 465, // Puerto SSL
+        tls: {
+          rejectUnauthorized: false // Para desarrollo
+        }
       });
 
-      logger.info('Transporter de email inicializado correctamente');
+      logger.info('Transporter de email inicializado correctamente', {
+        user: config.gmail.user,
+        hasPassword: !!config.gmail.password
+      });
     } catch (error) {
       logger.error('Error inicializando transporter:', error);
       throw error;

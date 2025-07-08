@@ -83,8 +83,8 @@ function VerifyEmail() {
 
           <div className="bg-blue-50 border-l-4 border-blue-500 p-4 mb-6">
             <p className="text-sm text-blue-700">
-              Por favor, revisa tu bandeja de entrada y sigue las instrucciones para verificar tu cuenta.
-              Si no encuentras el email, revisa tu carpeta de spam.
+              Por favor, revisa tu bandeja de entrada y sigue las instrucciones para verificar tu cuenta.<br/>
+              <span className="font-semibold">Si no encuentras el email en tu bandeja principal, revisa tu carpeta de spam o correo no deseado.</span>
             </p>
           </div>
 

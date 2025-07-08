@@ -22,7 +22,15 @@ function Login() {
   const handleLogin = async (values, { setSubmitting }) => {
     try {
       setError('');
-      await signInWithEmailAndPassword(auth, values.email, values.password);
+      const userCredential = await signInWithEmailAndPassword(auth, values.email, values.password);
+      await userCredential.user.reload();
+      if (!userCredential.user.emailVerified) {
+        navigate('/verify-email', {
+          state: { email: values.email }
+        });
+        setSubmitting(false);
+        return;
+      }
       navigate('/profile-selection'); 
     } catch (err) {
       switch (err.code) {

@@ -10,7 +10,9 @@ import { TutorService } from '../../services/tutorService';
 import { NotificationService } from '../../services/notificationService';
 import CreateReminderModal from './CreateReminderModal'; // 🆕 NUEVO IMPORT
 
-function NotificationCenter() {
+function NotificationCenter({ profileId = null }) {
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const pauseAutoRefresh = showCreateModal;
   const {
     notificaciones,
     loading,
@@ -18,11 +20,11 @@ function NotificationCenter() {
     marcarComoLeida,
     marcarTodasComoLeidas,
     cargarNotificaciones
-  } = useNotifications();
+  } = useNotifications(pauseAutoRefresh);
 
   // Estados locales existentes
   const [perfiles, setPerfiles] = useState([]);
-  const [perfilActivo, setPerfilActivo] = useState('todos');
+  const [perfilActivo, setPerfilActivo] = useState(profileId || 'todos');
   const [filtroActivo, setFiltroActivo] = useState('todas');
   const [mostrarSoloNoLeidas, setMostrarSoloNoLeidas] = useState(false);
   const [loadingMarcarTodas, setLoadingMarcarTodas] = useState(false);
@@ -30,7 +32,7 @@ function NotificationCenter() {
   const [errorPerfiles, setErrorPerfiles] = useState(null);
 
   // 🆕 NUEVO ESTADO para el modal de crear recordatorio
-  const [showCreateModal, setShowCreateModal] = useState(false);
+  // const [showCreateModal, setShowCreateModal] = useState(false); // Moved up
 
   // ✅ CORREGIDO: Cargar perfiles de forma segura y eficiente
   const fetchPerfiles = useCallback(async () => {
@@ -92,11 +94,18 @@ function NotificationCenter() {
   // ✅ CORREGIDO: Handler optimizado sin recarga duplicada
   const handleMarcarTodasComoLeidas = async () => {
     if (!auth.currentUser || loadingMarcarTodas) return;
-    
     setLoadingMarcarTodas(true);
     try {
-      await marcarTodasComoLeidas();
-      setMostrarSoloNoLeidas(false); // Desactiva el filtro
+      if (profileId) {
+        // Si estamos en modo niño, solo marcar las de ese perfil
+        const notifsPerfil = notificaciones.filter(n => n.profileId === profileId && !n.leida);
+        for (const notif of notifsPerfil) {
+          await marcarComoLeida(notif.id);
+        }
+      } else {
+        await marcarTodasComoLeidas();
+        setMostrarSoloNoLeidas(false); // Desactiva el filtro
+      }
       // ✅ NO RECARGAMOS - el hook ya actualiza el estado
     } catch (error) {
       console.error('Error marcando todas como leídas:', error);
@@ -149,21 +158,15 @@ function NotificationCenter() {
 
   // ✅ CORREGIDO: Filtrar notificaciones con validación
   const notificacionesFiltradas = notificaciones.filter(notif => {
-    // ✅ VALIDACIÓN: Verificar que notif existe
     if (!notif) return false;
-    
-    // Filtrar por perfil
-    if (perfilActivo && perfilActivo !== 'todos') {
-      // ✅ CORREGIDO: Manejo seguro de profileId undefined
+    // Si hay profileId (modo niño), solo mostrar las de ese perfil
+    if (profileId && notif.profileId !== profileId) return false;
+    // Si no hay profileId, usar el filtro de perfil activo
+    if (!profileId && perfilActivo && perfilActivo !== 'todos') {
       if (notif.profileId !== perfilActivo) return false;
     }
-    
-    // Filtrar por tipo
     if (filtroActivo !== 'todas' && notif.tipo !== filtroActivo) return false;
-    
-    // Filtrar solo no leídas
     if (mostrarSoloNoLeidas && notif.leida) return false;
-    
     return true;
   });
 
@@ -245,8 +248,8 @@ function NotificationCenter() {
             <FaBell />
             Centro de Notificaciones
           </h2>
+          {/* Mostrar controles de crear/actualizar/marcar todas SIEMPRE, pero crear recordatorio solo para el perfil actual si hay profileId */}
           <div className="flex gap-2">
-            {/* 🆕 NUEVO BOTÓN: Crear Recordatorio */}
             <button
               onClick={handleOpenCreateModal}
               className="px-4 py-2 bg-[var(--primary-blue)] text-white rounded-lg hover:opacity-90 
@@ -255,7 +258,6 @@ function NotificationCenter() {
               <FaPlus />
               Crear Recordatorio
             </button>
-
             <button
               onClick={() => cargarNotificaciones()}
               disabled={loading}
@@ -265,7 +267,6 @@ function NotificationCenter() {
               <FaSync className={loading ? 'animate-spin' : ''} />
               {loading ? 'Cargando...' : 'Actualizar'}
             </button>
-            
             {estadisticas?.noLeidas > 0 && (
               <button
                 onClick={handleMarcarTodasComoLeidas}
@@ -309,47 +310,52 @@ function NotificationCenter() {
         )}
 
         {/* ✅ MEJORADO: Selector de perfil con manejo de errores */}
-        {errorPerfiles ? (
-          <div className="bg-red-50 border border-red-200 rounded-lg p-3 mb-4 flex items-center gap-2">
-            <FaExclamationTriangle className="text-red-500" />
-            <span className="text-red-700 text-sm">{errorPerfiles}</span>
-            <button
-              onClick={fetchPerfiles}
-              className="ml-auto px-3 py-1 bg-red-600 text-white rounded text-xs hover:bg-red-700"
-            >
-              Reintentar
-            </button>
-          </div>
-        ) : perfiles.length > 0 && (
-          <div className="mb-4">
-            <label className="text-sm font-medium text-gray-700 mr-2">Filtrar por perfil:</label>
-            <select
-              value={perfilActivo}
-              onChange={e => setPerfilActivo(e.target.value)}
-              disabled={loadingPerfiles}
-              className="px-3 py-2 rounded-lg border border-gray-300 disabled:opacity-50"
-            >
-              <option value="todos">Todos los perfiles</option>
-              {perfiles.map(perfil => (
-                <option key={perfil.id} value={perfil.id}>
-                  {perfil.fullName || 'Perfil sin nombre'}
-                </option>
-              ))}
-            </select>
-            {loadingPerfiles && (
-              <span className="ml-2 text-sm text-gray-500">Cargando perfiles...</span>
+        {/* No mostrar el selector de perfil si hay profileId (modo niño) */}
+        {!profileId && (
+          <>
+            {errorPerfiles ? (
+              <div className="bg-red-50 border border-red-200 rounded-lg p-3 mb-4 flex items-center gap-2">
+                <FaExclamationTriangle className="text-red-500" />
+                <span className="text-red-700 text-sm">{errorPerfiles}</span>
+                <button
+                  onClick={fetchPerfiles}
+                  className="ml-auto px-3 py-1 bg-red-600 text-white rounded text-xs hover:bg-red-700"
+                >
+                  Reintentar
+                </button>
+              </div>
+            ) : perfiles.length > 0 && (
+              <div className="mb-4">
+                <label className="text-sm font-medium text-gray-700 mr-2">Filtrar por perfil:</label>
+                <select
+                  value={perfilActivo}
+                  onChange={e => setPerfilActivo(e.target.value)}
+                  disabled={loadingPerfiles}
+                  className="px-3 py-2 rounded-lg border border-gray-300 disabled:opacity-50"
+                >
+                  <option value="todos">Todos los perfiles</option>
+                  {perfiles.map(perfil => (
+                    <option key={perfil.id} value={perfil.id}>
+                      {perfil.fullName || 'Perfil sin nombre'}
+                    </option>
+                  ))}
+                </select>
+                {loadingPerfiles && (
+                  <span className="ml-2 text-sm text-gray-500">Cargando perfiles...</span>
+                )}
+              </div>
             )}
-          </div>
-        )}
 
-        {/* 🆕 MENSAJE INFO: Si no hay perfiles */}
-        {perfiles.length === 0 && !loadingPerfiles && !errorPerfiles && (
-          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mb-4 flex items-center gap-2">
-            <FaExclamationTriangle className="text-yellow-500" />
-            <span className="text-yellow-700 text-sm">
-              Necesitas crear al menos un perfil de niño para poder enviar recordatorios personalizados.
-            </span>
-          </div>
+            {/* 🆕 MENSAJE INFO: Si no hay perfiles */}
+            {perfiles.length === 0 && !loadingPerfiles && !errorPerfiles && (
+              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mb-4 flex items-center gap-2">
+                <FaExclamationTriangle className="text-yellow-500" />
+                <span className="text-yellow-700 text-sm">
+                  Necesitas crear al menos un perfil de niño para poder enviar recordatorios personalizados.
+                </span>
+              </div>
+            )}
+          </>
         )}
 
         {/* Filtros por tipo (🆕 MEJORADO: con más tipos) */}
@@ -514,11 +520,11 @@ function NotificationCenter() {
         )}
       </div>
 
-      {/* 🆕 NUEVO: Modal para crear recordatorios */}
+      {/* Modal para crear recordatorio: pasar solo el perfil actual si hay profileId */}
       <CreateReminderModal
         isOpen={showCreateModal}
         onClose={() => setShowCreateModal(false)}
-        perfiles={perfiles}
+        perfiles={profileId ? perfiles.filter(p => p.id === profileId) : perfiles}
         onSuccess={handleReminderCreated}
       />
     </div>

@@ -2,10 +2,10 @@
 import React, { useState, useEffect } from 'react';
 import { Formik, Form, Field } from 'formik';
 import * as Yup from 'yup';
-import { FaTimes, FaWhatsapp, FaBell, FaUserMd, FaPills, FaBook } from 'react-icons/fa';
+import { FaTimes, FaEnvelope, FaBell, FaUserMd, FaPills, FaBook, FaCheck } from 'react-icons/fa';
 import { TutorService } from '../../services/tutorService'; // Tu TutorService existente
 import { NotificationService } from '../../services/notificationService';
-import { WhatsAppService } from '../../services/whatsappService';
+import EmailService from '../../services/emailService'; // 🆕 NUEVO: Importar EmailService
 import { toast } from 'react-toastify';
 import { auth } from '../../config/firebase';
 
@@ -32,7 +32,7 @@ const ReminderSchema = Yup.object().shape({
     .matches(/^[\+]?[0-9\s\-\(\)]{10,15}$/, 'Formato de teléfono inválido')
     .required('El teléfono es requerido'),
   
-  enviarWhatsApp: Yup.boolean(),
+  enviarEmail: Yup.boolean(), // 🆕 NUEVO: Cambiar WhatsApp por Email
   
   // Campos específicos por tipo
   especialista: Yup.string().when('tipo', {
@@ -140,19 +140,33 @@ const TIPOS_RECORDATORIO = [
   }
 ];
 
-function CreateReminderModal({ isOpen, onClose, perfiles = [] }) {
+function CreateReminderModal({ isOpen, onClose, perfiles = [], onSuccess }) {
   // Estados
   const [loading, setLoading] = useState(false);
   const [infoContacto, setInfoContacto] = useState(null);
   const [loadingContacto, setLoadingContacto] = useState(true);
-  const [whatsappDisponible, setWhatsappDisponible] = useState(null);
+  const [emailDisponible, setEmailDisponible] = useState(true); // 🆕 NUEVO: Email siempre disponible
+  const [emailServiceStatus, setEmailServiceStatus] = useState(null); // 🆕 NUEVO: Estado del servicio
 
   // Cargar información del tutor al abrir el modal
   useEffect(() => {
     if (isOpen) {
       cargarInfoContacto();
+      verificarEmailService(); // 🆕 NUEVO: Verificar estado del servicio
     }
   }, [isOpen]);
+
+  // 🆕 NUEVO: Verificar estado del servicio de email
+  const verificarEmailService = async () => {
+    try {
+      const status = await EmailService.verificarEstado();
+      setEmailServiceStatus(status.data);
+      console.log('✅ Estado del servicio de email:', status.data);
+    } catch (error) {
+      console.warn('⚠️ Error verificando servicio de email:', error);
+      setEmailServiceStatus({ estado: 'ERROR', error: error.message });
+    }
+  };
 
   const cargarInfoContacto = async () => {
     try {
@@ -160,16 +174,12 @@ function CreateReminderModal({ isOpen, onClose, perfiles = [] }) {
       console.log('🔄 Cargando información de contacto...');
 
       // Usar tu TutorService existente
-      const [contacto, whatsapp] = await Promise.all([
-        TutorService.obtenerInfoContacto(),
-        TutorService.validarWhatsAppDisponible()
-      ]);
+      const contacto = await TutorService.obtenerInfoContacto();
 
       setInfoContacto(contacto);
-      setWhatsappDisponible(whatsapp);
+      setEmailDisponible(true); // 🆕 NUEVO: Email siempre disponible
       
       console.log('✅ Info de contacto cargada:', contacto);
-      console.log('📱 WhatsApp disponible:', whatsapp);
     } catch (error) {
       console.error('❌ Error cargando info de contacto:', error);
       toast.error('Error al cargar la información de contacto');
@@ -221,39 +231,60 @@ function CreateReminderModal({ isOpen, onClose, perfiles = [] }) {
           break;
       }
 
-      // 2. Crear la notificación en la base de datos
-      const notificationData = {
-        tutorId: auth.currentUser.uid,
-        profileId: values.profileId,
-        tipo: values.tipo,
-        titulo: values.titulo,
-        mensaje: values.mensaje,
-        datos: datosEspecificos,
-        prioridad: values.tipo === 'medicamento' ? 'alta' : 'normal'
+      // Tipos soportados por el backend para notificación automática
+      const tiposSoportados = {
+        actividad_pendiente: NotificationService.notificarActividadPendienteConEmail,
+        logro_alcanzado: NotificationService.notificarLogroConEmail,
+        resumen_semanal: NotificationService.enviarResumenSemanalConEmail,
+        bienvenida: NotificationService.enviarBienvenida,
+        recompensa_disponible: NotificationService.notificarRecompensaConEmail,
+        sesion_completada: NotificationService.notificarSesionCompletadaConEmail
       };
 
-      const notificationId = await NotificationService.crearNotificacion(notificationData);
-      console.log('✅ Notificación creada con ID:', notificationId);
-
-      // 3. Enviar por WhatsApp si está marcado
-      if (values.enviarWhatsApp && values.telefono) {
-        const tipoEmoji = {
-          'recordatorio_manual': '🔔',
-          'cita_especialista': '🏥',
-          'medicamento': '💊',
-          'tarea_especial': '📚'
+      // Si el tipo es soportado, llamar a la función correspondiente
+      if (tiposSoportados[values.tipo]) {
+        await tiposSoportados[values.tipo](
+          auth.currentUser.uid,
+          values.profileId,
+          datosEspecificos
+        );
+        toast.success('¡Recordatorio y correo enviados correctamente!');
+      } else {
+        // 2. Crear la notificación en la base de datos
+        const notificationData = {
+          tutorId: auth.currentUser.uid,
+          profileId: values.profileId,
+          tipo: values.tipo,
+          titulo: values.titulo,
+          mensaje: values.mensaje,
+          datos: datosEspecificos,
+          prioridad: values.tipo === 'medicamento' ? 'alta' : 'normal'
         };
 
-        const mensajeWhatsApp = `${tipoEmoji[values.tipo]} *${values.titulo}*\n\n${values.mensaje}\n\n👶 Para: ${nombreNino}\n\n---\n📱 Enviado desde Pequeños Genios`;
-        
-        // ✅ CORREGIDO: Usar el método correcto de WhatsAppService
-        try {
-          WhatsAppService.notificarRapido(values.telefono, nombreNino, mensajeWhatsApp);
-          console.log('📱 WhatsApp enviado correctamente');
-        } catch (whatsappError) {
-          console.warn('⚠️ Error enviando WhatsApp:', whatsappError);
-          // No fallar todo el proceso si WhatsApp falla
+        const notificationId = await NotificationService.crearNotificacion(notificationData);
+        console.log('✅ Notificación creada con ID:', notificationId);
+
+        // 🆕 NUEVO: Enviar por Email si está marcado
+        if (values.enviarEmail) {
+          try {
+            const emailData = {
+              nombreNino,
+              nombreTutor: auth.currentUser?.displayName || 'Tutor',
+              titulo: values.titulo,
+              mensaje: values.mensaje,
+              tipoRecordatorio: values.tipo,
+              ...datosEspecificos
+            };
+
+            await EmailService.enviarRecordatorioPersonalizado(emailData);
+            console.log('📧 Email enviado correctamente');
+            toast.success('📧 Recordatorio enviado por email');
+          } catch (emailError) {
+            console.warn('⚠️ Error enviando email:', emailError);
+            toast.warning('⚠️ El recordatorio se creó pero hubo un problema enviando el email');
+          }
         }
+        toast.success('¡Recordatorio creado exitosamente!');
       }
 
       // 4. Actualizar teléfono del tutor si cambió
@@ -262,11 +293,11 @@ function CreateReminderModal({ isOpen, onClose, perfiles = [] }) {
         console.log('📞 Teléfono actualizado en el perfil');
       }
 
-      // 5. Mostrar éxito y cerrar
-      toast.success('¡Recordatorio creado exitosamente!');
       resetForm();
       onClose();
-
+      if (onSuccess) {
+        onSuccess();
+      }
     } catch (error) {
       console.error('❌ Error creando recordatorio:', error);
       toast.error('Error al crear el recordatorio: ' + error.message);
@@ -283,6 +314,9 @@ function CreateReminderModal({ isOpen, onClose, perfiles = [] }) {
   };
 
   if (!isOpen) return null;
+
+  // Determinar el valor inicial de profileId
+  const initialProfileId = perfiles.length === 1 ? perfiles[0].id : '';
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
@@ -314,9 +348,9 @@ function CreateReminderModal({ isOpen, onClose, perfiles = [] }) {
                 tipo: 'recordatorio_manual',
                 titulo: '',
                 mensaje: '',
-                profileId: perfiles.length === 1 ? perfiles[0].id : '',
+                profileId: initialProfileId,
                 telefono: infoContacto?.telefono || '',
-                enviarWhatsApp: whatsappDisponible?.disponible || false,
+                enviarEmail: true, // 🆕 NUEVO: Email siempre disponible
                 // Campos específicos
                 especialista: '',
                 fechaCita: '',
@@ -326,6 +360,7 @@ function CreateReminderModal({ isOpen, onClose, perfiles = [] }) {
                 fechaEntrega: ''
               }}
               validationSchema={ReminderSchema}
+              enableReinitialize
               onSubmit={handleSubmit}
             >
               {({ errors, touched, values, setFieldValue }) => {
@@ -374,21 +409,9 @@ function CreateReminderModal({ isOpen, onClose, perfiles = [] }) {
                       <label className="block text-gray-700 font-medium mb-2">
                         👶 Para quién es el recordatorio:
                       </label>
-                      <Field
-                        as="select"
-                        name="profileId"
-                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[var(--primary-blue)] focus:border-transparent"
-                      >
-                        <option value="">Selecciona un perfil</option>
-                        {perfiles.map(perfil => (
-                          <option key={perfil.id} value={perfil.id}>
-                            {perfil.fullName || 'Perfil sin nombre'}
-                          </option>
-                        ))}
-                      </Field>
-                      {errors.profileId && touched.profileId && (
-                        <div className="text-red-500 text-sm mt-1">{errors.profileId}</div>
-                      )}
+                      <div className="w-full px-4 py-3 border border-gray-300 rounded-lg bg-gray-100 text-gray-700">
+                        {perfiles[0]?.fullName || 'Perfil sin nombre'}
+                      </div>
                     </div>
 
                     {/* Campos específicos según el tipo */}
@@ -555,28 +578,44 @@ function CreateReminderModal({ isOpen, onClose, perfiles = [] }) {
                       </p>
                     </div>
 
-                    {/* Enviar por WhatsApp */}
-                    <div className={`rounded-lg p-4 ${whatsappDisponible?.disponible ? 'bg-green-50 border border-green-200' : 'bg-gray-50 border border-gray-200'}`}>
+                    {/* Enviar por Email */}
+                    <div className={`rounded-lg p-4 ${emailDisponible ? 'bg-green-50 border border-green-200' : 'bg-gray-50 border border-gray-200'}`}>
                       <label className="flex items-center gap-3 cursor-pointer">
                         <Field
                           type="checkbox"
-                          name="enviarWhatsApp"
-                          disabled={!whatsappDisponible?.disponible}
+                          name="enviarEmail"
+                          disabled={!emailDisponible}
                           className="w-5 h-5 text-green-600 border-gray-300 rounded focus:ring-green-500 disabled:opacity-50"
                         />
                         <div className="flex items-center gap-2">
-                          <FaWhatsapp className={`text-xl ${whatsappDisponible?.disponible ? 'text-green-600' : 'text-gray-400'}`} />
-                          <span className={`font-medium ${whatsappDisponible?.disponible ? 'text-green-800' : 'text-gray-600'}`}>
-                            Enviar también por WhatsApp
+                          <FaEnvelope className={`text-xl ${emailDisponible ? 'text-green-600' : 'text-gray-400'}`} />
+                          <span className={`font-medium ${emailDisponible ? 'text-green-800' : 'text-gray-600'}`}>
+                            Enviar también por Email
                           </span>
                         </div>
                       </label>
-                      <p className={`text-sm mt-2 ml-8 ${whatsappDisponible?.disponible ? 'text-green-700' : 'text-gray-600'}`}>
-                        {whatsappDisponible?.disponible 
-                          ? 'Se abrirá WhatsApp con el mensaje prellenado para que lo envíes'
-                          : whatsappDisponible?.razon || 'WhatsApp no disponible'
+                      <p className={`text-sm mt-2 ml-8 ${emailDisponible ? 'text-green-700' : 'text-gray-600'}`}>
+                        {emailDisponible 
+                          ? 'Se enviará un email con el recordatorio'
+                          : emailServiceStatus?.estado === 'ERROR'
+                            ? emailServiceStatus.error
+                            : 'Email no disponible'
                         }
                       </p>
+                      
+                      {/* 🆕 NUEVO: Indicador de estado del servicio */}
+                      {emailServiceStatus && (
+                        <div className="mt-3 ml-8 flex items-center gap-2">
+                          <div className={`w-2 h-2 rounded-full ${
+                            emailServiceStatus.estado === 'ACTIVO' ? 'bg-green-500' : 'bg-red-500'
+                          }`}></div>
+                          <span className={`text-xs ${
+                            emailServiceStatus.estado === 'ACTIVO' ? 'text-green-700' : 'text-red-700'
+                          }`}>
+                            Servicio de email: {emailServiceStatus.estado}
+                          </span>
+                        </div>
+                      )}
                     </div>
 
                     {/* Botones */}

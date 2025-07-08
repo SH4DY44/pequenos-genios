@@ -3,51 +3,24 @@
  * Integra con el backend de correos
  */
 
+import { auth } from '../config/firebase';
+
 class EmailService {
   constructor() {
-    this.baseURL = process.env.REACT_APP_EMAIL_SERVICE_URL || 'http://localhost:3001/api/email';
-    this.apiKey = process.env.REACT_APP_EMAIL_API_KEY || null;
+    // URL del servicio de email (ajusta según tu configuración)
+    this.baseURL = process.env.REACT_APP_EMAIL_SERVICE_URL || 'http://localhost:3002';
+    this.apiKey = process.env.REACT_APP_EMAIL_API_KEY || 'tu-api-key-aqui';
   }
 
   /**
-   * Headers por defecto para las peticiones
+   * Obtener headers para las peticiones
    */
   getHeaders() {
-    const headers = {
+    return {
       'Content-Type': 'application/json',
+      'Authorization': `Bearer ${this.apiKey}`,
+      'X-User-ID': auth.currentUser?.uid || ''
     };
-
-    if (this.apiKey) {
-      headers['X-API-Key'] = this.apiKey;
-    }
-
-    return headers;
-  }
-
-  /**
-   * Realizar petición HTTP
-   */
-  async request(endpoint, options = {}) {
-    try {
-      const response = await fetch(`${this.baseURL}${endpoint}`, {
-        ...options,
-        headers: {
-          ...this.getHeaders(),
-          ...options.headers
-        }
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.message || data.error || 'Error en la petición');
-      }
-
-      return data;
-    } catch (error) {
-      console.error('Error in EmailService request:', error);
-      throw error;
-    }
   }
 
   /**
@@ -55,22 +28,26 @@ class EmailService {
    */
   async enviarCorreo(destinatario, tipo, datos) {
     try {
-      const response = await this.request('/send', {
+      const response = await fetch(`${this.baseURL}/send`, {
         method: 'POST',
+        headers: this.getHeaders(),
         body: JSON.stringify({
           destinatario,
           tipo,
-          datos: {
-            ...datos,
-            urlPlataforma: window.location.origin
-          }
+          datos
         })
       });
 
-      return response.data;
+      const resultado = await response.json();
+
+      if (!response.ok) {
+        throw new Error(resultado.message || 'Error enviando correo');
+      }
+
+      return resultado;
     } catch (error) {
       console.error('Error enviando correo:', error);
-      throw error;
+      throw new Error(`Error enviando correo: ${error.message}`);
     }
   }
 
@@ -79,25 +56,22 @@ class EmailService {
    */
   async enviarMultiples(correos) {
     try {
-      const correosConUrl = correos.map(correo => ({
-        ...correo,
-        datos: {
-          ...correo.datos,
-          urlPlataforma: window.location.origin
-        }
-      }));
-
-      const response = await this.request('/send-multiple', {
+      const response = await fetch(`${this.baseURL}/send-multiple`, {
         method: 'POST',
-        body: JSON.stringify({
-          correos: correosConUrl
-        })
+        headers: this.getHeaders(),
+        body: JSON.stringify({ correos })
       });
 
-      return response.data;
+      const resultado = await response.json();
+
+      if (!response.ok) {
+        throw new Error(resultado.message || 'Error enviando correos');
+      }
+
+      return resultado;
     } catch (error) {
       console.error('Error enviando múltiples correos:', error);
-      throw error;
+      throw new Error(`Error enviando correos: ${error.message}`);
     }
   }
 
@@ -106,14 +80,21 @@ class EmailService {
    */
   async verificarEstado() {
     try {
-      const response = await this.request('/status');
-      return response.data;
+      const response = await fetch(`${this.baseURL}/status`, {
+        method: 'GET',
+        headers: this.getHeaders()
+      });
+
+      const resultado = await response.json();
+
+      if (!response.ok) {
+        throw new Error(resultado.message || 'Error verificando estado');
+      }
+
+      return resultado;
     } catch (error) {
       console.error('Error verificando estado del servicio:', error);
-      return { 
-        estado: 'ERROR', 
-        error: error.message 
-      };
+      throw new Error(`Error verificando estado: ${error.message}`);
     }
   }
 
@@ -122,120 +103,134 @@ class EmailService {
    */
   async obtenerPlantillas() {
     try {
-      const response = await this.request('/templates');
-      return response.data;
+      const response = await fetch(`${this.baseURL}/templates`, {
+        method: 'GET',
+        headers: this.getHeaders()
+      });
+
+      const resultado = await response.json();
+
+      if (!response.ok) {
+        throw new Error(resultado.message || 'Error obteniendo plantillas');
+      }
+
+      return resultado;
     } catch (error) {
       console.error('Error obteniendo plantillas:', error);
-      throw error;
+      throw new Error(`Error obteniendo plantillas: ${error.message}`);
     }
   }
 
   /**
    * Enviar correo de prueba
    */
-  async enviarCorreoPrueba(destinatario) {
+  async enviarPrueba(destinatario) {
     try {
-      const response = await this.request('/test', {
+      const response = await fetch(`${this.baseURL}/test`, {
         method: 'POST',
-        body: JSON.stringify({
-          destinatario
-        })
+        headers: this.getHeaders(),
+        body: JSON.stringify({ destinatario })
       });
 
-      return response.data;
+      const resultado = await response.json();
+
+      if (!response.ok) {
+        throw new Error(resultado.message || 'Error enviando correo de prueba');
+      }
+
+      return resultado;
     } catch (error) {
       console.error('Error enviando correo de prueba:', error);
+      throw new Error(`Error enviando correo de prueba: ${error.message}`);
+    }
+  }
+
+  /**
+   * Enviar notificación automática
+   */
+  async enviarNotificacionAutomatica(tipo, datos) {
+    try {
+      // Obtener el email del tutor actual
+      const emailTutor = auth.currentUser?.email;
+      
+      if (!emailTutor) {
+        throw new Error('No se pudo obtener el email del tutor');
+      }
+
+      return await this.enviarCorreo(emailTutor, tipo, datos);
+    } catch (error) {
+      console.error('Error enviando notificación automática:', error);
       throw error;
     }
   }
 
   /**
-   * Métodos de conveniencia para diferentes tipos de correos
+   * Enviar recordatorio personalizado
    */
+  async enviarRecordatorioPersonalizado(datos) {
+    try {
+      const emailTutor = auth.currentUser?.email;
+      
+      if (!emailTutor) {
+        throw new Error('No se pudo obtener el email del tutor');
+      }
 
-  /**
-   * Enviar recordatorio de actividad pendiente
-   */
-  async recordatorioActividad(destinatario, nombreNino, nombreTutor, horasSinActividad) {
-    return this.enviarCorreo(destinatario, 'actividad_pendiente', {
-      nombreNino,
-      nombreTutor,
-      horasSinActividad
-    });
-  }
+      // Mapeo de tipos personalizados a tipos válidos del backend
+      const tipoMap = {
+        recordatorio_manual: 'actividad_pendiente',
+        cita_especialista: 'actividad_pendiente',
+        medicamento: 'actividad_pendiente',
+        tarea_especial: 'actividad_pendiente'
+      };
+      const tipoPlantilla = tipoMap[datos.tipoRecordatorio] || 'actividad_pendiente';
 
-  /**
-   * Notificar nuevo logro
-   */
-  async notificarLogro(destinatario, nombreNino, nombreTutor, logro, puntos, descripcion) {
-    return this.enviarCorreo(destinatario, 'logro_alcanzado', {
-      nombreNino,
-      nombreTutor,
-      logro,
-      puntos,
-      descripcion
-    });
-  }
+      // Personalización de título y mensaje según tipo
+      let titulo = datos.titulo;
+      let mensaje = datos.mensaje;
+      switch (datos.tipoRecordatorio) {
+        case 'medicamento':
+          titulo = `💊 Recordatorio de Medicamento para ${datos.nombreNino || ''}`;
+          mensaje = `Es hora de tomar: ${datos.medicamento || ''}.\nDosis: ${datos.dosis || ''}.\n${datos.mensaje || ''}`;
+          break;
+        case 'cita_especialista':
+          titulo = `🏥 Cita médica para ${datos.nombreNino || ''}`;
+          mensaje = `Especialista: ${datos.especialista || ''}.\nFecha: ${datos.fechaCita || ''}.\n${datos.mensaje || ''}`;
+          break;
+        case 'tarea_especial':
+          titulo = `📚 Tarea escolar para ${datos.nombreNino || ''}`;
+          mensaje = `Materia: ${datos.materia || ''}.\nFecha de entrega: ${datos.fechaEntrega || ''}.\n${datos.mensaje || ''}`;
+          break;
+        case 'recordatorio_manual':
+        default:
+          titulo = `🔔 Recordatorio para ${datos.nombreNino || ''}`;
+          mensaje = datos.mensaje || '';
+          break;
+      }
 
-  /**
-   * Enviar resumen semanal
-   */
-  async resumenSemanal(destinatario, nombreNino, nombreTutor, estadisticas) {
-    return this.enviarCorreo(destinatario, 'resumen_semanal', {
-      nombreNino,
-      nombreTutor,
-      ...estadisticas
-    });
-  }
+      // Crear datos para el email
+      const datosEmail = {
+        nombreNino: datos.nombreNino,
+        nombreTutor: auth.currentUser?.displayName || 'Tutor',
+        tipoRecordatorio: datos.tipoRecordatorio,
+        mensaje,
+        titulo,
+        fechaCreacion: new Date().toISOString(),
+        urlPlataforma: window.location.origin,
+        fechaCita: datos.fechaCita || undefined,
+        fechaEntrega: datos.fechaEntrega || undefined,
+        hora: datos.hora || undefined,
+        dosis: datos.dosis || undefined,
+        especialista: datos.especialista || undefined,
+        medicamento: datos.medicamento || undefined,
+        materia: datos.materia || undefined
+      };
 
-  /**
-   * Enviar correo de bienvenida
-   */
-  async bienvenida(destinatario, nombreTutor, nombreNino) {
-    return this.enviarCorreo(destinatario, 'bienvenida', {
-      nombreTutor,
-      nombreNino
-    });
-  }
-
-  /**
-   * Notificar recompensa disponible
-   */
-  async notificarRecompensa(destinatario, nombreNino, nombreTutor, recompensa, puntosRequeridos, puntosActuales) {
-    return this.enviarCorreo(destinatario, 'recompensa_disponible', {
-      nombreNino,
-      nombreTutor,
-      recompensa,
-      puntosRequeridos,
-      puntosActuales
-    });
-  }
-
-  /**
-   * Recordatorio de evaluación
-   */
-  async recordatorioEvaluacion(destinatario, nombreNino, nombreTutor, tipoEvaluacion, fechaLimite) {
-    return this.enviarCorreo(destinatario, 'recordatorio_evaluacion', {
-      nombreNino,
-      nombreTutor,
-      tipoEvaluacion,
-      fechaLimite
-    });
-  }
-
-  /**
-   * Notificar sesión completada
-   */
-  async sesionCompletada(destinatario, nombreNino, nombreTutor, estadisticasSesion) {
-    return this.enviarCorreo(destinatario, 'sesion_completada', {
-      nombreNino,
-      nombreTutor,
-      ...estadisticasSesion
-    });
+      return await this.enviarCorreo(emailTutor, tipoPlantilla, datosEmail);
+    } catch (error) {
+      console.error('Error enviando recordatorio personalizado:', error);
+      throw error;
+    }
   }
 }
 
-// Instancia singleton
-const emailService = new EmailService();
-
-export default emailService;
+export default new EmailService();

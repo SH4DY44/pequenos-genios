@@ -28,7 +28,7 @@ const corsConfig = {
   },
   credentials: true,
   methods: ['GET', 'POST'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-API-Key']
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-API-Key', 'x-user-id']
 };
 
 /**

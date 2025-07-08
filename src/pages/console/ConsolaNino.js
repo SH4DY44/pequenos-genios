@@ -500,7 +500,7 @@ function ConsolaNino() {
 
           {seccionActiva === "notificaciones" && (
             <div className="p-6">
-              <NotificationCenter />
+              <NotificationCenter profileId={profileId} />
             </div>
           )}
         </div>

@@ -4,7 +4,7 @@ import { auth } from '../config/firebase';
 import { NotificationService } from '../services/notificationService';
 import { toast } from 'react-toastify';
 
-export function useNotifications() {
+export function useNotifications(pauseAutoRefresh = false) {
   const [notificaciones, setNotificaciones] = useState([]);
   const [loading, setLoading] = useState(true);
   const [estadisticas, setEstadisticas] = useState(null);
@@ -174,6 +174,7 @@ export function useNotifications() {
   // ✅ MEJORADO: Auto-refresh con verificación de usuario
   useEffect(() => {
     if (!auth.currentUser) return;
+    if (pauseAutoRefresh) return; // Pausa el auto-refresh si está activo
 
     const interval = setInterval(() => {
       // Solo auto-refresh si hay usuario autenticado
@@ -183,7 +184,7 @@ export function useNotifications() {
     }, 60000); // Recargar cada minuto
 
     return () => clearInterval(interval);
-  }, [cargarNotificaciones]);
+  }, [cargarNotificaciones, pauseAutoRefresh]);
 
   // ✅ AGREGADO: Cleanup al desmontar
   useEffect(() => {
