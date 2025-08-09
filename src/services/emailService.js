@@ -8,8 +8,8 @@ import { auth } from '../config/firebase';
 class EmailService {
   constructor() {
     // URL del servicio de email (ajusta según tu configuración)
-    this.baseURL = process.env.REACT_APP_EMAIL_SERVICE_URL || 'http://localhost:3002';
-    this.apiKey = process.env.REACT_APP_EMAIL_API_KEY || 'tu-api-key-aqui';
+    this.baseURL = process.env.REACT_APP_EMAIL_SERVICE_URL || 'http://localhost:3001/api/email';
+    this.apiKey = process.env.REACT_APP_EMAIL_API_KEY || '';
   }
 
   /**
@@ -233,4 +233,5 @@ class EmailService {
   }
 }
 
-export default new EmailService();
+const emailService = new EmailService();
+export default emailService;

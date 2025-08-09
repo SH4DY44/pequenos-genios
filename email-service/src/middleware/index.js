@@ -79,7 +79,7 @@ const generalRateLimit = rateLimit({
  */
 const apiKeyAuth = (req, res, next) => {
   // Si no hay API key configurada, saltar autenticación
-  if (!config.security.apiKey) {
+  if (!config.security.apiKey || config.security.apiKey === 'tu-api-key-aqui') {
     return next();
   }
   

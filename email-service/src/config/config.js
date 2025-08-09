@@ -1,4 +1,4 @@
-require('dotenv').config();
+require('dotenv').config({ path: '/home/shady44/Escritorio/PT/pequenos-genios/email-service/.env' });
 
 const config = {
   // Configuración del servidor
