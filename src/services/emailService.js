@@ -8,7 +8,7 @@ import { auth } from '../config/firebase';
 class EmailService {
   constructor() {
     // URL del servicio de email (ajusta según tu configuración)
-    this.baseURL = process.env.REACT_APP_EMAIL_SERVICE_URL || 'http://localhost:3001/api/email';
+    this.baseURL = process.env.REACT_APP_EMAIL_SERVICE_URL || 'http://localhost:3002/api/email';
     this.apiKey = process.env.REACT_APP_EMAIL_API_KEY || '';
   }
 
@@ -18,7 +18,7 @@ class EmailService {
   getHeaders() {
     return {
       'Content-Type': 'application/json',
-      'Authorization': `Bearer ${this.apiKey}`,
+      'x-api-key': this.apiKey || 'your-secure-api-key-here',
       'X-User-ID': auth.currentUser?.uid || ''
     };
   }
@@ -157,10 +157,38 @@ class EmailService {
         throw new Error('No se pudo obtener el email del tutor');
       }
 
-      return await this.enviarCorreo(emailTutor, tipo, datos);
+      return await this.enviarRecordatorioAutomatico(emailTutor, tipo, datos);
     } catch (error) {
       console.error('Error enviando notificación automática:', error);
       throw error;
+    }
+  }
+
+  /**
+   * 🚀 NUEVO: Enviar recordatorio automático usando el endpoint optimizado
+   */
+  async enviarRecordatorioAutomatico(email, tipo, datos) {
+    try {
+      const response = await fetch(`${this.baseURL}/automatic`, {
+        method: 'POST',
+        headers: this.getHeaders(),
+        body: JSON.stringify({
+          email,
+          tipo,
+          ...datos
+        })
+      });
+
+      const resultado = await response.json();
+
+      if (!response.ok) {
+        throw new Error(resultado.error || 'Error enviando recordatorio automático');
+      }
+
+      return resultado;
+    } catch (error) {
+      console.error('Error enviando recordatorio automático:', error);
+      throw new Error(`Error enviando recordatorio automático: ${error.message}`);
     }
   }
 
@@ -176,55 +204,59 @@ class EmailService {
       }
 
       // Mapeo de tipos personalizados a tipos válidos del backend
-      const tipoMap = {
-        recordatorio_manual: 'actividad_pendiente',
-        cita_especialista: 'actividad_pendiente',
-        medicamento: 'actividad_pendiente',
-        tarea_especial: 'actividad_pendiente'
-      };
-      const tipoPlantilla = tipoMap[datos.tipoRecordatorio] || 'actividad_pendiente';
-
-      // Personalización de título y mensaje según tipo
-      let titulo = datos.titulo;
-      let mensaje = datos.mensaje;
+      let tipoPlantilla = 'recordatorio_general'; // Default
+      
       switch (datos.tipoRecordatorio) {
         case 'medicamento':
-          titulo = `💊 Recordatorio de Medicamento para ${datos.nombreNino || ''}`;
-          mensaje = `Es hora de tomar: ${datos.medicamento || ''}.\nDosis: ${datos.dosis || ''}.\n${datos.mensaje || ''}`;
+          tipoPlantilla = 'recordatorio_medicamento';
           break;
         case 'cita_especialista':
-          titulo = `🏥 Cita médica para ${datos.nombreNino || ''}`;
-          mensaje = `Especialista: ${datos.especialista || ''}.\nFecha: ${datos.fechaCita || ''}.\n${datos.mensaje || ''}`;
+        case 'cita_medica':
+          tipoPlantilla = 'recordatorio_cita_medica';
           break;
         case 'tarea_especial':
-          titulo = `📚 Tarea escolar para ${datos.nombreNino || ''}`;
-          mensaje = `Materia: ${datos.materia || ''}.\nFecha de entrega: ${datos.fechaEntrega || ''}.\n${datos.mensaje || ''}`;
+        case 'tarea_escolar':
+          tipoPlantilla = 'recordatorio_tarea_escolar';
           break;
         case 'recordatorio_manual':
+        case 'general':
         default:
-          titulo = `🔔 Recordatorio para ${datos.nombreNino || ''}`;
-          mensaje = datos.mensaje || '';
+          tipoPlantilla = 'recordatorio_general';
           break;
       }
 
-      // Crear datos para el email
+      // Crear datos para el email con todos los campos específicos
       const datosEmail = {
         nombreNino: datos.nombreNino,
         nombreTutor: auth.currentUser?.displayName || 'Tutor',
-        tipoRecordatorio: datos.tipoRecordatorio,
-        mensaje,
-        titulo,
+        titulo: datos.titulo || 'Recordatorio importante',
+        mensaje: datos.mensaje || '',
         fechaCreacion: new Date().toISOString(),
         urlPlataforma: window.location.origin,
-        fechaCita: datos.fechaCita || undefined,
-        fechaEntrega: datos.fechaEntrega || undefined,
-        hora: datos.hora || undefined,
-        dosis: datos.dosis || undefined,
-        especialista: datos.especialista || undefined,
-        medicamento: datos.medicamento || undefined,
-        materia: datos.materia || undefined
+        
+        // Campos específicos para cada tipo
+        ...(tipoPlantilla === 'recordatorio_medicamento' && {
+          medicamento: datos.medicamento || datos.titulo,
+          dosis: datos.dosis || '',
+          hora: datos.hora || ''
+        }),
+        
+        ...(tipoPlantilla === 'recordatorio_cita_medica' && {
+          especialista: datos.especialista || datos.medicamento || 'Especialista',
+          fechaCita: datos.fechaCita || datos.fecha || '',
+          hora: datos.hora || '',
+          lugar: datos.lugar || ''
+        }),
+        
+        ...(tipoPlantilla === 'recordatorio_tarea_escolar' && {
+          materia: datos.materia || datos.especialista || 'Materia',
+          fechaEntrega: datos.fechaEntrega || datos.fechaCita || datos.fecha || '',
+          descripcion: datos.descripcion || datos.mensaje || ''
+        })
       };
 
+      console.log('Enviando recordatorio con:', { tipo: tipoPlantilla, datos: datosEmail });
+      
       return await this.enviarCorreo(emailTutor, tipoPlantilla, datosEmail);
     } catch (error) {
       console.error('Error enviando recordatorio personalizado:', error);

@@ -78,8 +78,16 @@ const generalRateLimit = rateLimit({
  * Middleware de autenticación API Key (opcional)
  */
 const apiKeyAuth = (req, res, next) => {
+  // Log para debug
+  logger.info('API Key Auth Debug:', {
+    configuredKey: config.security.apiKey,
+    providedKey: req.headers['x-api-key'],
+    hasKey: !!config.security.apiKey
+  });
+  
   // Si no hay API key configurada, saltar autenticación
   if (!config.security.apiKey || config.security.apiKey === 'tu-api-key-aqui') {
+    logger.info('API Key auth skipped - no key configured');
     return next();
   }
   
@@ -96,6 +104,7 @@ const apiKeyAuth = (req, res, next) => {
     logger.warn('API Key inválida:', {
       ip: req.ip,
       providedKey: apiKey,
+      expectedKey: config.security.apiKey,
       userAgent: req.get('User-Agent')
     });
     
@@ -105,6 +114,7 @@ const apiKeyAuth = (req, res, next) => {
     });
   }
   
+  logger.info('API Key validation successful');
   next();
 };
 

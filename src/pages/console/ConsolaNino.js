@@ -48,8 +48,9 @@ function ConsolaNino() {
     }
 
     setLoading(true);
-    const perfilRef = doc(db, "childProfiles", profileId);
+    const perfilRef = doc(db, "childProfiles", profileId); //Apuntamos al documento correcto de firestore
 
+    //Establecemos el listener
     const unsubscribe = onSnapshot(perfilRef, (docSnap) => {
       if (docSnap.exists()) {
         setPerfilNino({ ...docSnap.data(), id: profileId });
@@ -102,7 +103,7 @@ function ConsolaNino() {
         );
       }
   
-      // ✅ RESTAURADO: Agregar estrellas si las hay
+      // RESTAURADO: Agregar estrellas si las hay
       // Pero solo si NO es una actividad (que ya las procesó directamente)
       if (gameData.estrellas > 0 && !gameData.esActividad) {
         await RewardsService.agregarEstrellas(
@@ -506,7 +507,7 @@ function ConsolaNino() {
         </div>
       </div>
 
-      {/* Modal de nuevos logros */}
+      {/* Modal de logros */}
       {nuevosLogros.length > 0 && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-2xl p-8 max-w-md w-full mx-4 text-center">

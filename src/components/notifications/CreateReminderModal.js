@@ -6,6 +6,7 @@ import { FaTimes, FaEnvelope, FaBell, FaUserMd, FaPills, FaBook, FaCheck } from 
 import { TutorService } from '../../services/tutorService'; // Tu TutorService existente
 import { NotificationService } from '../../services/notificationService';
 import EmailService from '../../services/emailService'; // 🆕 NUEVO: Importar EmailService
+import { ReminderScheduler } from '../../services/reminderScheduler'; // 🆕 NUEVO: Importar ReminderScheduler
 import { toast } from 'react-toastify';
 import { auth } from '../../config/firebase';
 
@@ -29,12 +30,12 @@ const ReminderSchema = Yup.object().shape({
     .required('Selecciona un perfil'),
   
   telefono: Yup.string()
-    .matches(/^[\+]?[0-9\s\-\(\)]{10,15}$/, 'Formato de teléfono inválido')
+    .matches(/^[+]?[0-9\s\-()]{10,15}$/, 'Formato de teléfono inválido')
     .required('El teléfono es requerido'),
   
-  enviarEmail: Yup.boolean(), // 🆕 NUEVO: Cambiar WhatsApp por Email
+  enviarEmail: Yup.boolean(),
   
-  // Campos específicos por tipo
+  // Campos específicos por tipo con validación de fechas futuras
   especialista: Yup.string().when('tipo', {
     is: 'cita_especialista',
     then: schema => schema.required('El especialista es requerido'),
@@ -43,7 +44,9 @@ const ReminderSchema = Yup.object().shape({
   
   fechaCita: Yup.date().when('tipo', {
     is: 'cita_especialista',
-    then: schema => schema.required('La fecha de la cita es requerida'),
+    then: schema => schema
+      .required('La fecha de la cita es requerida')
+      .min(new Date(Date.now() + 60000), 'La fecha de la cita debe ser al menos 1 minuto en el futuro'),
     otherwise: schema => schema.nullable()
   }),
   
@@ -67,7 +70,9 @@ const ReminderSchema = Yup.object().shape({
   
   fechaEntrega: Yup.date().when('tipo', {
     is: 'tarea_especial',
-    then: schema => schema.required('La fecha de entrega es requerida'),
+    then: schema => schema
+      .required('La fecha de entrega es requerida')
+      .min(new Date(Date.now() + 60000), 'La fecha de entrega debe ser al menos 1 minuto en el futuro'),
     otherwise: schema => schema.nullable()
   })
 });
@@ -147,6 +152,19 @@ function CreateReminderModal({ isOpen, onClose, perfiles = [], onSuccess }) {
   const [loadingContacto, setLoadingContacto] = useState(true);
   const [emailDisponible, setEmailDisponible] = useState(true); // 🆕 NUEVO: Email siempre disponible
   const [emailServiceStatus, setEmailServiceStatus] = useState(null); // 🆕 NUEVO: Estado del servicio
+
+  // 🆕 NUEVO: Calcular fechas mínimas dinámicamente
+  const getFechaMinima = () => {
+    const ahora = new Date();
+    ahora.setMinutes(ahora.getMinutes() + 1); // Al menos 1 minuto en el futuro
+    return ahora.toISOString().slice(0, 16);
+  };
+
+  const getFechaMinimaDate = () => {
+    const ahora = new Date();
+    ahora.setDate(ahora.getDate() + 0); // Desde hoy
+    return ahora.toISOString().split('T')[0];
+  };
 
   // Cargar información del tutor al abrir el modal
   useEffect(() => {
@@ -229,6 +247,9 @@ function CreateReminderModal({ isOpen, onClose, perfiles = [], onSuccess }) {
             fechaEntrega: values.fechaEntrega
           };
           break;
+        default:
+          // No hay campos específicos para otros tipos
+          break;
       }
 
       // Tipos soportados por el backend para notificación automática
@@ -277,13 +298,17 @@ function CreateReminderModal({ isOpen, onClose, perfiles = [], onSuccess }) {
             };
 
             await EmailService.enviarRecordatorioPersonalizado(emailData);
-            console.log('📧 Email enviado correctamente');
+            console.log('📧 Email inmediato enviado correctamente');
             toast.success('📧 Recordatorio enviado por email');
           } catch (emailError) {
-            console.warn('⚠️ Error enviando email:', emailError);
+            console.warn('⚠️ Error enviando email inmediato:', emailError);
             toast.warning('⚠️ El recordatorio se creó pero hubo un problema enviando el email');
           }
         }
+
+        // 🆕 NUEVO: Programar recordatorio automático para la fecha especificada
+        await programarRecordatorioAutomatico(values, nombreNino, datosEspecificos);
+        
         toast.success('¡Recordatorio creado exitosamente!');
       }
 
@@ -311,6 +336,81 @@ function CreateReminderModal({ isOpen, onClose, perfiles = [], onSuccess }) {
   const aplicarPlantilla = (plantilla, setFieldValue) => {
     setFieldValue('titulo', plantilla.titulo);
     setFieldValue('mensaje', plantilla.mensaje);
+  };
+
+  // 🆕 NUEVO: Programar recordatorio automático para la fecha especificada
+  const programarRecordatorioAutomatico = async (values, nombreNino, datosEspecificos) => {
+    try {
+      let fechaProgramada = null;
+      
+      // Determinar la fecha para el recordatorio automático según el tipo
+      switch (values.tipo) {
+        case 'cita_especialista':
+          if (values.fechaCita) {
+            // Programar recordatorio 1 día antes de la cita
+            fechaProgramada = new Date(values.fechaCita);
+            fechaProgramada.setDate(fechaProgramada.getDate() - 1);
+            fechaProgramada.setHours(19, 0, 0, 0); // 7:00 PM del día anterior
+          }
+          break;
+          
+        case 'tarea_especial':
+          if (values.fechaEntrega) {
+            // Programar recordatorio 1 día antes de la entrega
+            fechaProgramada = new Date(values.fechaEntrega);
+            fechaProgramada.setDate(fechaProgramada.getDate() - 1);
+            fechaProgramada.setHours(18, 0, 0, 0); // 6:00 PM del día anterior
+          }
+          break;
+          
+        case 'medicamento':
+          // Para medicamentos, programar recordatorio diario a una hora específica
+          // Por simplicidad, programaremos para mañana a la misma hora
+          fechaProgramada = new Date();
+          fechaProgramada.setDate(fechaProgramada.getDate() + 1);
+          fechaProgramada.setHours(8, 0, 0, 0); // 8:00 AM todos los días
+          break;
+          
+        default:
+          // Para recordatorios generales, no programar automáticamente
+          return;
+      }
+      
+      if (fechaProgramada && fechaProgramada > new Date()) {
+        const recordatorioData = {
+          tutorId: auth.currentUser.uid,
+          profileId: values.profileId,
+          nombreNino,
+          tipo: values.tipo,
+          fechaProgramada,
+          datos: {
+            titulo: values.titulo,
+            mensaje: values.mensaje,
+            ...datosEspecificos
+          }
+        };
+        
+        const recordatorioId = await ReminderScheduler.programarRecordatorio(recordatorioData);
+        console.log('📅 Recordatorio automático programado:', recordatorioId);
+        
+        // Mostrar mensaje informativo
+        const fechaFormateada = fechaProgramada.toLocaleDateString('es-ES', {
+          weekday: 'long',
+          year: 'numeric',
+          month: 'long',
+          day: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit'
+        });
+        
+        toast.info(`📅 Recordatorio automático programado para: ${fechaFormateada}`, {
+          autoClose: 8000
+        });
+      }
+    } catch (error) {
+      console.warn('⚠️ Error programando recordatorio automático:', error);
+      // No fallar el proceso principal si hay error en la programación
+    }
   };
 
   if (!isOpen) return null;
@@ -437,6 +537,7 @@ function CreateReminderModal({ isOpen, onClose, perfiles = [], onSuccess }) {
                           <Field
                             type="datetime-local"
                             name="fechaCita"
+                            min={getFechaMinima()}
                             className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
                           />
                           {errors.fechaCita && touched.fechaCita && (
@@ -499,6 +600,7 @@ function CreateReminderModal({ isOpen, onClose, perfiles = [], onSuccess }) {
                           <Field
                             type="date"
                             name="fechaEntrega"
+                            min={getFechaMinimaDate()}
                             className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
                           />
                           {errors.fechaEntrega && touched.fechaEntrega && (

@@ -14,7 +14,23 @@ const enviarCorreoSchema = Joi.object({
     'bienvenida',
     'recompensa_disponible',
     'recordatorio_evaluacion',
-    'sesion_completada'
+    'sesion_completada',
+    'recordatorio_general',
+    'recordatorio_medicamento',
+    'recordatorio_cita_medica',
+    'recordatorio_tarea_escolar',
+    // 🤖 Nuevos recordatorios automáticos inteligentes
+    'recordatorio_automatico',
+    'recordatorio_inactividad',
+    'recordatorio_racha_perdida',
+    'recordatorio_meta_semanal',
+    'recordatorio_actividad_favorita',
+    'recordatorio_area_rezagada',
+    'recordatorio_cerca_logro',
+    'recordatorio_estrellas_acumuladas',
+    'recordatorio_rutina_diaria',
+    'recordatorio_fin_semana',
+    'felicitacion_progreso'
   ).required(),
   datos: Joi.object().required()
 });
@@ -30,7 +46,23 @@ const enviarMultiplesSchema = Joi.object({
         'bienvenida',
         'recompensa_disponible',
         'recordatorio_evaluacion',
-        'sesion_completada'
+        'sesion_completada',
+        'recordatorio_general',
+        'recordatorio_medicamento',
+        'recordatorio_cita_medica',
+        'recordatorio_tarea_escolar',
+        // 🤖 Nuevos recordatorios automáticos inteligentes
+        'recordatorio_automatico',
+        'recordatorio_inactividad',
+        'recordatorio_racha_perdida',
+        'recordatorio_meta_semanal',
+        'recordatorio_actividad_favorita',
+        'recordatorio_area_rezagada',
+        'recordatorio_cerca_logro',
+        'recordatorio_estrellas_acumuladas',
+        'recordatorio_rutina_diaria',
+        'recordatorio_fin_semana',
+        'felicitacion_progreso'
       ).required(),
       datos: Joi.object().required()
     })
@@ -216,6 +248,30 @@ router.get('/templates', (req, res) => {
       nombre: 'Sesión Completada',
       descripcion: 'Notificación cuando se completa una sesión',
       campos: ['nombreNino', 'nombreTutor', 'duracion', 'actividades', 'puntos', 'precision']
+    },
+    {
+      tipo: 'recordatorio_general',
+      nombre: 'Recordatorio General',
+      descripcion: 'Recordatorio personalizado general',
+      campos: ['nombreNino', 'nombreTutor', 'titulo', 'mensaje', 'urlPlataforma']
+    },
+    {
+      tipo: 'recordatorio_medicamento',
+      nombre: 'Recordatorio de Medicamento',
+      descripcion: 'Recordatorio específico para medicamentos',
+      campos: ['nombreNino', 'nombreTutor', 'medicamento', 'dosis', 'hora', 'mensaje', 'urlPlataforma']
+    },
+    {
+      tipo: 'recordatorio_cita_medica',
+      nombre: 'Recordatorio de Cita Médica',
+      descripcion: 'Recordatorio para citas médicas',
+      campos: ['nombreNino', 'nombreTutor', 'especialista', 'fechaCita', 'hora', 'lugar', 'mensaje', 'urlPlataforma']
+    },
+    {
+      tipo: 'recordatorio_tarea_escolar',
+      nombre: 'Recordatorio de Tarea Escolar',
+      descripcion: 'Recordatorio para tareas escolares',
+      campos: ['nombreNino', 'nombreTutor', 'materia', 'fechaEntrega', 'descripcion', 'mensaje', 'urlPlataforma']
     }
   ];
   

@@ -1,0 +1,20 @@
+[Unit]
+Description=Pequeños Genios Email Service
+After=network.target
+
+[Service]
+Type=simple
+User=shady44
+WorkingDirectory=/home/shady44/Escritorio/PT/pequenos-genios/email-service
+ExecStart=/usr/bin/node server.js
+Restart=always
+RestartSec=10
+Environment=NODE_ENV=production
+Environment=PORT=3002
+
+# Logging
+StandardOutput=append:/home/shady44/Escritorio/PT/pequenos-genios/email-service/logs/systemd.log
+StandardError=append:/home/shady44/Escritorio/PT/pequenos-genios/email-service/logs/systemd-error.log
+
+[Install]
+WantedBy=multi-user.target

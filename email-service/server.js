@@ -20,7 +20,9 @@ const {
 } = require('./src/middleware');
 
 // Rutas
+// Importar rutas
 const emailRoutes = require('./src/routes/email');
+const automaticEmailRoutes = require('./src/routes/automaticEmail');
 
 // Crear directorio de logs si no existe
 const logsDir = path.join(__dirname, 'logs');
@@ -73,7 +75,10 @@ app.get('/info', (req, res) => {
       'GET /api/email/templates - Lista de plantillas disponibles',
       'POST /api/email/send - Enviar correo',
       'POST /api/email/send-multiple - Enviar múltiples correos',
-      'POST /api/email/test - Enviar correo de prueba'
+      'POST /api/email/test - Enviar correo de prueba',
+      'POST /api/email/automatic - Enviar recordatorio automático',
+      'POST /api/email/bulk-automatic - Envío masivo de recordatorios automáticos',
+      'GET /api/email/test-automatic/:tipo - Probar recordatorio automático'
     ],
     rateLimit: {
       general: '100 requests per 15 minutes',
@@ -84,6 +89,7 @@ app.get('/info', (req, res) => {
 
 // Rutas de email con rate limiting específico
 app.use('/api/email', emailRateLimit, apiKeyAuth, emailRoutes);
+app.use('/api/email', emailRateLimit, apiKeyAuth, automaticEmailRoutes);
 
 // Middleware de rutas no encontradas
 app.use(notFoundHandler);
