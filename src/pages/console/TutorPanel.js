@@ -5,6 +5,9 @@ import { db } from '../../config/firebase';
 import { toast } from 'react-toastify';
 import { enviarNotificacionConfiguracion } from '../../services/notificationEmailService';
 import reportService from '../../services/reportService';
+import { usePromocionNiveles } from '../../hooks/usePromocionNiveles';
+import ProgresoNivelComponent from '../../components/admin/ProgresoNivelComponent';
+import { TareasPeriodicasNiveles } from '../../services/tareasPeriodicasNiveles';
 import { 
   FaChartLine, 
   FaClock, 
@@ -87,6 +90,18 @@ function TutorPanel({ profileId: profileIdProp }) {
   // Obtener profileId desde props o desde los parámetros de URL como fallback
   const urlParams = new URLSearchParams(location.search);
   const profileId = profileIdProp || urlParams.get('profileId') || location.state?.profileId;
+
+  // 🎓 Hook para manejo de promoción de niveles
+  const {
+    evaluacionActual,
+    promocionDisponible,
+    cargandoEvaluacion,
+    promoverNivel,
+    porcentajeCumplimiento,
+    criteriosCumplidos,
+    totalCriterios,
+    sugerencias
+  } = usePromocionNiveles(profileId, perfilNino);
 
   // Función para calcular estadísticas (sin dependencias para evitar bucles)
   const calcularEstadisticas = useCallback((datosNino, actividades = []) => {
@@ -460,6 +475,28 @@ function TutorPanel({ profileId: profileIdProp }) {
     }
   };
 
+  // 🎓 Función para evaluar manualmente la promoción de nivel
+  const evaluarPromocionManual = async () => {
+    try {
+      const evaluacion = await TareasPeriodicasNiveles.evaluarPerfilManualmente(profileId);
+      
+      if (evaluacion.puedePromoverse) {
+        toast.success(
+          `🎉 ¡Listo para promoción! Nivel: ${evaluacion.nivelActual} → ${evaluacion.nivelSiguiente}`,
+          { duration: 3000 }
+        );
+      } else {
+        toast.info(
+          `📊 Progreso actual: ${evaluacion.porcentajeCumplimiento}% completado`,
+          { duration: 3000 }
+        );
+      }
+    } catch (error) {
+      console.error('Error evaluando promoción:', error);
+      toast.error('Error al evaluar promoción');
+    }
+  };
+
   const secciones = [
     { id: 'progreso', nombre: 'Progreso', icono: <FaChartLine className="text-lg" />, color: 'bg-blue-500' },
     { id: 'horarios', nombre: 'Horarios', icono: <FaClock className="text-lg" />, color: 'bg-green-500' },
@@ -598,6 +635,28 @@ function TutorPanel({ profileId: profileIdProp }) {
         {/* Sección: Progreso */}
         {seccionActiva === 'progreso' && (
           <div className="space-y-6">
+            {/* Header de la sección con botón de evaluación */}
+            <div className="bg-white p-6 rounded-lg shadow-sm border">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-xl font-bold text-gray-900">Progreso de {perfilNino?.fullName}</h2>
+                  <p className="text-gray-600 mt-1">
+                    Nivel actual: <span className="font-semibold text-blue-600">
+                      {perfilNino?.resultadosEvaluacion?.nivelAsignado?.nivel?.toUpperCase() || 'BÁSICO'}
+                    </span>
+                  </p>
+                </div>
+                <button
+                  onClick={evaluarPromocionManual}
+                  className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg transition-colors duration-200 flex items-center"
+                  title="Evaluar progreso hacia el siguiente nivel"
+                >
+                  <FaTrophy className="mr-2" />
+                  Evaluar Progreso
+                </button>
+              </div>
+            </div>
+
             {/* Tarjetas de estadísticas principales */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
               <div className="bg-white p-6 rounded-lg shadow-sm border">
@@ -640,6 +699,17 @@ function TutorPanel({ profileId: profileIdProp }) {
                 </div>
               </div>
             </div>
+
+            {/* 🎓 Componente de Progreso de Niveles */}
+            <ProgresoNivelComponent
+              evaluacionActual={evaluacionActual}
+              promocionDisponible={promocionDisponible}
+              cargandoEvaluacion={cargandoEvaluacion}
+              onPromover={promoverNivel}
+              porcentajeCumplimiento={porcentajeCumplimiento}
+              criteriosCumplidos={criteriosCumplidos}
+              totalCriterios={totalCriterios}
+            />
 
             {/* Actividades recientes */}
             <div className="bg-white p-6 rounded-lg shadow-sm border">

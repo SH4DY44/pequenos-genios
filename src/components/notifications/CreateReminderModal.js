@@ -170,11 +170,11 @@ function CreateReminderModal({ isOpen, onClose, perfiles = [], onSuccess }) {
   useEffect(() => {
     if (isOpen) {
       cargarInfoContacto();
-      // verificarEmailService(); // 🔇 COMENTADO: Para evitar problemas visuales
+      // verificarEmailService(); //  Para evitar problemas visuales
     }
   }, [isOpen]);
 
-  // 🔇 COMENTADO: Verificar estado del servicio de email (para evitar problemas visuales)
+  //  Verificar estado del servicio de email (para evitar problemas visuales)
   /*
   const verificarEmailService = async () => {
     try {
