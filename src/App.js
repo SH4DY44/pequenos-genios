@@ -15,7 +15,7 @@ import TutorProfile from './pages/profiles/TutorProfile';
 import InitialEvaluation from './pages/evaluation/InitialEvaluation';
 import ResultadosEvaluacion from './pages/evaluation/ResultadosEvaluacion';
 import ConsolaNino from './pages/console/ConsolaNino';
-import AdminPanel from './pages/console/AdminPanel';
+import TutorPanel from './pages/console/TutorPanel';
 import ActividadContainer from './pages/console/actividades/ActividadContainer';
 
 // NUEVO: Página de notificaciones
@@ -64,7 +64,9 @@ function App() {
           {/* NUEVA: Ruta de notificaciones */}
           <Route path="/notifications" element={<NotificationsPage/>} />
           
-          <Route path="/admin" element={<AdminPanel/>} />
+          {/* Panel de Tutor/Padre */}
+          <Route path="/tutor-panel" element={<TutorPanel/>} />
+          <Route path="/admin" element={<TutorPanel/>} />
         </Routes>
       </NotificationWrapper>
     </Router>

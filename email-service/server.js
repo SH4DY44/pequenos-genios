@@ -23,6 +23,7 @@ const {
 // Importar rutas
 const emailRoutes = require('./src/routes/email');
 const automaticEmailRoutes = require('./src/routes/automaticEmail');
+const reportesRoutes = require('./src/routes/reportes');
 
 // Crear directorio de logs si no existe
 const logsDir = path.join(__dirname, 'logs');
@@ -78,7 +79,10 @@ app.get('/info', (req, res) => {
       'POST /api/email/test - Enviar correo de prueba',
       'POST /api/email/automatic - Enviar recordatorio automático',
       'POST /api/email/bulk-automatic - Envío masivo de recordatorios automáticos',
-      'GET /api/email/test-automatic/:tipo - Probar recordatorio automático'
+      'GET /api/email/test-automatic/:tipo - Probar recordatorio automático',
+      'GET /api/reportes/status - Estado del servicio de reportes',
+      'GET /api/reportes/tipos - Tipos de reportes disponibles',
+      'POST /api/reportes/generate-pdf - Generar reporte PDF'
     ],
     rateLimit: {
       general: '100 requests per 15 minutes',
@@ -90,6 +94,14 @@ app.get('/info', (req, res) => {
 // Rutas de email con rate limiting específico
 app.use('/api/email', emailRateLimit, apiKeyAuth, emailRoutes);
 app.use('/api/email', emailRateLimit, apiKeyAuth, automaticEmailRoutes);
+
+// Rutas de reportes con rate limiting específico
+app.use('/api/reportes', emailRateLimit, apiKeyAuth, reportesRoutes);
+
+// Ruta de desarrollo para reportes (sin autenticación)
+if (config.env === 'development') {
+  app.use('/api/dev/reportes', emailRateLimit, reportesRoutes);
+}
 
 // Middleware de rutas no encontradas
 app.use(notFoundHandler);

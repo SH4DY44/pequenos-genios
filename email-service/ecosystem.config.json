@@ -9,7 +9,7 @@
       "watch": false,
       "max_memory_restart": "1G",
       "env": {
-        "NODE_ENV": "production",
+        "NODE_ENV": "development",
         "PORT": "3002"
       },
       "log_file": "./logs/pm2-combined.log",

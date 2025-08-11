@@ -8,7 +8,7 @@ import { auth } from '../config/firebase';
 class EmailService {
   constructor() {
     // URL del servicio de email (ajusta según tu configuración)
-    this.baseURL = process.env.REACT_APP_EMAIL_SERVICE_URL || 'http://localhost:3002/api/email';
+    this.baseURL = process.env.REACT_APP_EMAIL_SERVICE_URL || 'http://localhost:3001/api/email';
     this.apiKey = process.env.REACT_APP_EMAIL_API_KEY || '';
   }
 
@@ -18,7 +18,7 @@ class EmailService {
   getHeaders() {
     return {
       'Content-Type': 'application/json',
-      'x-api-key': this.apiKey || 'your-secure-api-key-here',
+      'X-API-Key': this.apiKey || 'your-secure-api-key-here',
       'X-User-ID': auth.currentUser?.uid || ''
     };
   }
@@ -28,17 +28,31 @@ class EmailService {
    */
   async enviarCorreo(destinatario, tipo, datos) {
     try {
+      console.log('🔍 [EmailService.enviarCorreo] Iniciando envío');
+      console.log('🔍 [EmailService.enviarCorreo] Destinatario:', destinatario);
+      console.log('🔍 [EmailService.enviarCorreo] Tipo:', tipo);
+      console.log('🔍 [EmailService.enviarCorreo] Datos:', datos);
+      console.log('🔍 [EmailService.enviarCorreo] URL completa:', `${this.baseURL}/send`);
+      
+      const payload = {
+        destinatario,
+        tipo,
+        datos
+      };
+      
+      console.log('🔍 [EmailService.enviarCorreo] Payload final:', payload);
+      
       const response = await fetch(`${this.baseURL}/send`, {
         method: 'POST',
         headers: this.getHeaders(),
-        body: JSON.stringify({
-          destinatario,
-          tipo,
-          datos
-        })
+        body: JSON.stringify(payload)
       });
 
+      console.log('🔍 [EmailService.enviarCorreo] Response status:', response.status);
+      console.log('🔍 [EmailService.enviarCorreo] Response ok:', response.ok);
+
       const resultado = await response.json();
+      console.log('🔍 [EmailService.enviarCorreo] Resultado del servidor:', resultado);
 
       if (!response.ok) {
         throw new Error(resultado.message || 'Error enviando correo');
@@ -76,25 +90,39 @@ class EmailService {
   }
 
   /**
-   * Verificar estado del servicio
+   * Verificar si el servicio de email está disponible
    */
-  async verificarEstado() {
+  async verificarEmailService() {
     try {
-      const response = await fetch(`${this.baseURL}/status`, {
+      console.log('🔍 [EmailService] Verificando servicio en:', `${this.baseURL}/api/email/status`);
+      
+      const response = await fetch(`${this.baseURL}/api/email/status`, {
         method: 'GET',
-        headers: this.getHeaders()
+        headers: this.getHeaders(),
+        mode: 'cors'
       });
 
+      console.log('🔍 [EmailService] Response status:', response.status);
+      console.log('🔍 [EmailService] Response headers:', response.headers);
+      
       const resultado = await response.json();
-
+      console.log('🔍 [EmailService] Resultado verificación:', resultado);
+      
       if (!response.ok) {
-        throw new Error(resultado.message || 'Error verificando estado');
+        console.error('❌ [EmailService] Error en verificación:', resultado);
+        return false;
       }
 
-      return resultado;
+      // Si el servicio responde OK, consideramos que está disponible
+      // Incluso si auth.currentUser es null, el servicio backend está funcionando
+      return true;
+      
     } catch (error) {
-      console.error('Error verificando estado del servicio:', error);
-      throw new Error(`Error verificando estado: ${error.message}`);
+      console.error('❌ [EmailService] Error al verificar servicio:', error);
+      console.error('❌ [EmailService] Stack trace:', error.stack);
+      
+      // En caso de error de red, asumimos que el servicio no está disponible
+      return false;
     }
   }
 
@@ -197,11 +225,19 @@ class EmailService {
    */
   async enviarRecordatorioPersonalizado(datos) {
     try {
-      const emailTutor = auth.currentUser?.email;
+      console.log('🔍 [EmailService] Iniciando enviarRecordatorioPersonalizado');
+      console.log('🔍 [EmailService] Datos recibidos:', datos);
+      console.log('🔍 [EmailService] auth.currentUser:', auth.currentUser);
+      
+      // TEMPORAL: Para debug, usar email fijo si no hay usuario autenticado
+      let emailTutor = auth.currentUser?.email;
       
       if (!emailTutor) {
-        throw new Error('No se pudo obtener el email del tutor');
+        console.warn('⚠️ [EmailService] No hay usuario autenticado, usando email de debug');
+        emailTutor = 'vazquezhector645@gmail.com'; // Email de debug temporal
       }
+      
+      console.log('🔍 [EmailService] Email del tutor (final):', emailTutor);
 
       // Mapeo de tipos personalizados a tipos válidos del backend
       let tipoPlantilla = 'recordatorio_general'; // Default
@@ -225,10 +261,12 @@ class EmailService {
           break;
       }
 
+      console.log('🔍 [EmailService] Tipo de plantilla seleccionada:', tipoPlantilla);
+
       // Crear datos para el email con todos los campos específicos
       const datosEmail = {
         nombreNino: datos.nombreNino,
-        nombreTutor: auth.currentUser?.displayName || 'Tutor',
+        nombreTutor: auth.currentUser?.displayName || datos.nombreTutor || 'Tutor',
         titulo: datos.titulo || 'Recordatorio importante',
         mensaje: datos.mensaje || '',
         fechaCreacion: new Date().toISOString(),
@@ -255,9 +293,14 @@ class EmailService {
         })
       };
 
-      console.log('Enviando recordatorio con:', { tipo: tipoPlantilla, datos: datosEmail });
+      console.log('🔍 [EmailService] Datos finales del email:', datosEmail);
+      console.log('🔍 [EmailService] URL del servicio:', this.baseURL);
+      console.log('🔍 [EmailService] Headers:', this.getHeaders());
       
-      return await this.enviarCorreo(emailTutor, tipoPlantilla, datosEmail);
+      const resultado = await this.enviarCorreo(emailTutor, tipoPlantilla, datosEmail);
+      console.log('🔍 [EmailService] Resultado del envío:', resultado);
+      
+      return resultado;
     } catch (error) {
       console.error('Error enviando recordatorio personalizado:', error);
       throw error;

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
   doc,
@@ -18,8 +18,7 @@ import "react-toastify/dist/ReactToastify.css";
 import banner from "../../assets/images/banner.jpeg";
 import AddProfileModal from "../../components/profiles/AddProfileModal";
 import EditProfileModal from "../../components/profiles/EditProfileModal";
-import NotificationIndicator from "../../components/notifications/NotificationIndicator";
-import { NotificationScheduler } from "../../services/notificationScheduler";
+import TutorPanel from "../console/TutorPanel";
 
 function ProfileSelection() {
   const [tutorName, setTutorName] = useState("");
@@ -30,6 +29,9 @@ function ProfileSelection() {
   const navigate = useNavigate();
   const [showEditModal, setShowEditModal] = useState(false);
   const [selectedProfile, setSelectedProfile] = useState(null);
+  const [showTutorPanel, setShowTutorPanel] = useState(false);
+  const [tutorPanelProfileId, setTutorPanelProfileId] = useState(null);
+  const menuRef = useRef(null);
 
   const fetchProfiles = async (userId) => {
     try {
@@ -81,6 +83,23 @@ function ProfileSelection() {
 
     return () => unsubscribe();
   }, [navigate]);
+
+  // Cerrar menú al hacer clic fuera de él
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (menuRef.current && !menuRef.current.contains(event.target)) {
+        setShowMenu(false);
+      }
+    };
+
+    if (showMenu) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showMenu]);
 
   const handleLogout = async () => {
     try {
@@ -266,28 +285,38 @@ function ProfileSelection() {
           </Link>
 
           <div className="flex items-center space-x-6">
-            <NotificationIndicator
-              onOpenCenter={() => navigate("/notificaciones")}
-            />
-            <button
-              onClick={() => setShowMenu(!showMenu)}
-              className="flex items-center space-x-2 text-white hover:opacity-80"
-            >
-              <div className="w-10 h-10 bg-white rounded-full flex items-center justify-center text-[var(--primary-blue)] font-bold">
-                {tutorName.charAt(0).toUpperCase()}
-              </div>
-            </button>
+            <div className="relative" ref={menuRef}>
+              <button
+                onClick={() => setShowMenu(!showMenu)}
+                className="flex items-center space-x-2 text-white hover:opacity-80"
+              >
+                <div className="w-10 h-10 bg-white rounded-full flex items-center justify-center text-[var(--primary-blue)] font-bold">
+                  {tutorName.charAt(0).toUpperCase()}
+                </div>
+              </button>
 
-            {showMenu && (
-              <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg py-2 z-50">
-                <button
-                  onClick={handleLogout}
-                  className="w-full text-left px-4 py-2 hover:bg-gray-100 text-red-600"
-                >
-                  Cerrar Sesión
-                </button>
-              </div>
-            )}
+              {showMenu && (
+                <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg py-2 z-50">
+                  <button
+                    onClick={() => {
+                      setShowMenu(false);
+                      setShowTutorPanel(true);
+                    }}
+                    className="w-full text-left px-4 py-2 hover:bg-gray-100 text-purple-600 flex items-center"
+                  >
+                    <span className="mr-2">👨‍🏫</span>
+                    Panel de Tutor
+                  </button>
+                  <hr className="my-1" />
+                  <button
+                    onClick={handleLogout}
+                    className="w-full text-left px-4 py-2 hover:bg-gray-100 text-red-600"
+                  >
+                    Cerrar Sesión
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </nav>
@@ -536,6 +565,67 @@ function ProfileSelection() {
           </div>
         </div>
       </div>
+
+      {/* Modal del Panel de Tutor */}
+      {showTutorPanel && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg w-full max-w-4xl h-full max-h-[85vh] overflow-auto">
+            <div className="sticky top-0 bg-white border-b p-4 flex justify-between items-center">
+              <div className="flex items-center space-x-4">
+                <h2 className="text-xl font-bold">Panel de Tutor</h2>
+                {/* Selector de niños */}
+                {profiles.filter(p => p.evaluacionFinalizada).length > 0 && (
+                  <div className="flex items-center space-x-2">
+                    <span className="text-sm text-gray-600">Niño:</span>
+                    <select 
+                      value={tutorPanelProfileId || ""}
+                      onChange={(e) => setTutorPanelProfileId(e.target.value)}
+                      className="px-3 py-1 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                    >
+                      <option value="">Selecciona un niño</option>
+                      {profiles
+                        .filter(profile => profile.evaluacionFinalizada)
+                        .map(profile => (
+                          <option key={profile.id} value={profile.id}>
+                            {profile.fullName}
+                          </option>
+                        ))
+                      }
+                    </select>
+                  </div>
+                )}
+              </div>
+              <button
+                onClick={() => {
+                  setShowTutorPanel(false);
+                  setTutorPanelProfileId(null);
+                }}
+                className="text-gray-500 hover:text-gray-700 text-2xl"
+              >
+                ×
+              </button>
+            </div>
+            <div className="p-0">
+              {tutorPanelProfileId ? (
+                <TutorPanel profileId={tutorPanelProfileId} />
+              ) : (
+                <div className="p-8 text-center">
+                  <div className="text-6xl mb-4">👨‍🏫</div>
+                  <h3 className="text-xl font-bold text-gray-800 mb-2">Panel de Tutor</h3>
+                  {profiles.filter(p => p.evaluacionFinalizada).length > 0 ? (
+                    <p className="text-gray-600">Selecciona un niño para ver su progreso y configuración</p>
+                  ) : (
+                    <div className="text-gray-600">
+                      <p className="mb-4">No hay perfiles con evaluación completada</p>
+                      <p className="text-sm">Los niños deben completar su evaluación inicial para acceder al panel de tutor</p>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       <AddProfileModal
         isOpen={showModal}

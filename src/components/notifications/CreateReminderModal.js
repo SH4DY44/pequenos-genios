@@ -151,7 +151,7 @@ function CreateReminderModal({ isOpen, onClose, perfiles = [], onSuccess }) {
   const [infoContacto, setInfoContacto] = useState(null);
   const [loadingContacto, setLoadingContacto] = useState(true);
   const [emailDisponible, setEmailDisponible] = useState(true); // 🆕 NUEVO: Email siempre disponible
-  const [emailServiceStatus, setEmailServiceStatus] = useState(null); // 🆕 NUEVO: Estado del servicio
+  // const [emailServiceStatus, setEmailServiceStatus] = useState(null); // 🔇 COMENTADO: Estado del servicio
 
   // 🆕 NUEVO: Calcular fechas mínimas dinámicamente
   const getFechaMinima = () => {
@@ -170,21 +170,26 @@ function CreateReminderModal({ isOpen, onClose, perfiles = [], onSuccess }) {
   useEffect(() => {
     if (isOpen) {
       cargarInfoContacto();
-      verificarEmailService(); // 🆕 NUEVO: Verificar estado del servicio
+      // verificarEmailService(); // 🔇 COMENTADO: Para evitar problemas visuales
     }
   }, [isOpen]);
 
-  // 🆕 NUEVO: Verificar estado del servicio de email
+  // 🔇 COMENTADO: Verificar estado del servicio de email (para evitar problemas visuales)
+  /*
   const verificarEmailService = async () => {
     try {
-      const status = await EmailService.verificarEstado();
-      setEmailServiceStatus(status.data);
-      console.log('✅ Estado del servicio de email:', status.data);
+      console.log('🔍 Verificando estado del servicio de email...');
+      console.log('🔍 EmailService:', EmailService);
+      const status = await EmailService.verificarEmailService();
+      console.log('🔍 Estado del servicio obtenido:', status);
+      setEmailServiceStatus(status ? { estado: 'ACTIVO' } : { estado: 'ERROR' });
+      console.log('✅ Estado del servicio de email:', status);
     } catch (error) {
-      console.warn('⚠️ Error verificando servicio de email:', error);
+      console.error('❌ Error verificando estado del servicio de email:', error);
       setEmailServiceStatus({ estado: 'ERROR', error: error.message });
     }
   };
+  */
 
   const cargarInfoContacto = async () => {
     try {
@@ -288,6 +293,10 @@ function CreateReminderModal({ isOpen, onClose, perfiles = [], onSuccess }) {
         // 🆕 NUEVO: Enviar por Email si está marcado
         if (values.enviarEmail) {
           try {
+            console.log('📧 Iniciando envío de email inmediato...');
+            console.log('📧 EmailService disponible:', !!EmailService);
+            console.log('📧 Método enviarRecordatorioPersonalizado disponible:', !!EmailService.enviarRecordatorioPersonalizado);
+            
             const emailData = {
               nombreNino,
               nombreTutor: auth.currentUser?.displayName || 'Tutor',
@@ -297,12 +306,16 @@ function CreateReminderModal({ isOpen, onClose, perfiles = [], onSuccess }) {
               ...datosEspecificos
             };
 
-            await EmailService.enviarRecordatorioPersonalizado(emailData);
+            console.log('📧 Datos del email a enviar:', emailData);
+            
+            const resultado = await EmailService.enviarRecordatorioPersonalizado(emailData);
+            console.log('📧 Resultado del envío:', resultado);
             console.log('📧 Email inmediato enviado correctamente');
             toast.success('📧 Recordatorio enviado por email');
           } catch (emailError) {
-            console.warn('⚠️ Error enviando email inmediato:', emailError);
-            toast.warning('⚠️ El recordatorio se creó pero hubo un problema enviando el email');
+            console.error('❌ Error enviando email inmediato:', emailError);
+            console.error('❌ Stack trace:', emailError.stack);
+            toast.warning('⚠️ El recordatorio se creó pero hubo un problema enviando el email: ' + emailError.message);
           }
         }
 
@@ -699,13 +712,11 @@ function CreateReminderModal({ isOpen, onClose, perfiles = [], onSuccess }) {
                       <p className={`text-sm mt-2 ml-8 ${emailDisponible ? 'text-green-700' : 'text-gray-600'}`}>
                         {emailDisponible 
                           ? 'Se enviará un email con el recordatorio'
-                          : emailServiceStatus?.estado === 'ERROR'
-                            ? emailServiceStatus.error
-                            : 'Email no disponible'
+                          : 'Email no disponible'
                         }
                       </p>
                       
-                      {/* 🆕 NUEVO: Indicador de estado del servicio */}
+                      {/* 🔇 COMENTADO: Indicador de estado del servicio 
                       {emailServiceStatus && (
                         <div className="mt-3 ml-8 flex items-center gap-2">
                           <div className={`w-2 h-2 rounded-full ${
@@ -714,10 +725,11 @@ function CreateReminderModal({ isOpen, onClose, perfiles = [], onSuccess }) {
                           <span className={`text-xs ${
                             emailServiceStatus.estado === 'ACTIVO' ? 'text-green-700' : 'text-red-700'
                           }`}>
-                            Servicio de email: {emailServiceStatus.estado}
+                            Servicio de email: {emailServiceStatus.estado === 'ACTIVO' ? 'CONECTADO' : 'DESCONECTADO'}
                           </span>
                         </div>
                       )}
+                      */}
                     </div>
 
                     {/* Botones */}

@@ -504,6 +504,7 @@ function ConsolaNino() {
               <NotificationCenter profileId={profileId} />
             </div>
           )}
+
         </div>
       </div>
 
