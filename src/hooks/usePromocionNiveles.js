@@ -66,13 +66,39 @@ export function usePromocionNiveles(profileId, perfilNino) {
     }
   }, [profileId, evaluacionActual, evaluarPromocion]);
 
+  // Efecto para limpiar estado cuando cambia el profileId
+  useEffect(() => {
+    if (profileId) {
+      // Limpiar estado anterior cuando cambia el profileId
+      setEvaluacionActual(null);
+      setPromocionDisponible(false);
+      setUltimaVerificacion(null);
+      setCargandoEvaluacion(false);
+    }
+  }, [profileId]);
+
   // Verificar automáticamente cada vez que cambian los datos del perfil
   useEffect(() => {
     if (profileId && perfilNino) {
+      // Verificar si el nivel del perfil cambió desde la última evaluación
+      const nivelActualPerfil = perfilNino?.resultadosEvaluacion?.nivelAsignado?.nivel || 'básico';
+      const nivelUltimaEvaluacion = evaluacionActual?.nivelActual || '';
+      const nivelCambio = nivelActualPerfil !== nivelUltimaEvaluacion;
+      
       // Verificar solo si han pasado al menos 5 minutos desde la última verificación
+      // O si el nivel cambió (siempre reevaluar en este caso)
       const ahora = new Date();
-      if (!ultimaVerificacion || 
-          (ahora - ultimaVerificacion) > 5 * 60 * 1000) { // 5 minutos
+      const tiempoEsperaCompleto = (!ultimaVerificacion || 
+          (ahora - ultimaVerificacion) > 5 * 60 * 1000); // 5 minutos
+      
+      if (tiempoEsperaCompleto || nivelCambio) {
+        console.log('🎓 Iniciando evaluación de promoción:', {
+          profileId,
+          nivelCambio,
+          tiempoEsperaCompleto,
+          nivelActualPerfil,
+          nivelUltimaEvaluacion
+        });
         
         // Delay para evitar muchas evaluaciones seguidas
         const timer = setTimeout(() => {
@@ -82,7 +108,18 @@ export function usePromocionNiveles(profileId, perfilNino) {
         return () => clearTimeout(timer);
       }
     }
-  }, [profileId, perfilNino, ultimaVerificacion, evaluarPromocion]);
+  }, [profileId, perfilNino, ultimaVerificacion, evaluacionActual?.nivelActual, evaluarPromocion]);
+
+  // Efecto de limpieza cuando se desmonta el componente
+  useEffect(() => {
+    return () => {
+      // Limpiar estado al desmontar
+      setEvaluacionActual(null);
+      setPromocionDisponible(false);
+      setUltimaVerificacion(null);
+      setCargandoEvaluacion(false);
+    };
+  }, []);
 
   // Calcular progreso hacia el siguiente nivel
   const calcularProgresoHaciaSiguienteNivel = useCallback(() => {

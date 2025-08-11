@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Formik, Form, Field } from 'formik';
 import * as Yup from 'yup';
@@ -18,6 +18,15 @@ const LoginSchema = Yup.object().shape({
 function Login() {
   const navigate = useNavigate();
   const [error, setError] = useState('');
+  const [isLoaded, setIsLoaded] = useState(false);
+
+  useEffect(() => {
+    // Animación de entrada elegante
+    const timer = setTimeout(() => {
+      setIsLoaded(true);
+    }, 100);
+    return () => clearTimeout(timer);
+  }, []);
 
   const handleLogin = async (values, { setSubmitting }) => {
     try {
@@ -48,8 +57,12 @@ function Login() {
   };
 
   return (
-    <div className="min-h-screen bg-[var(--primary-yellow)]">
-      <nav className="bg-[var(--primary-blue)] p-4">
+    <div className={`min-h-screen bg-[var(--primary-yellow)] transition-all duration-700 ease-out ${
+      isLoaded ? 'opacity-100 transform translate-y-0' : 'opacity-0 transform translate-y-4'
+    }`}>
+      <nav className={`bg-gradient-to-r from-blue-600 to-purple-700 p-4 transition-all duration-500 ease-out delay-100 ${
+        isLoaded ? 'opacity-100 transform translate-y-0' : 'opacity-0 transform -translate-y-4'
+      }`}>
         <div className="flex items-center">
           <Link to="/" className="flex items-center">
             <img src={banner} alt="Pequeños Genios" className="h-12" />
@@ -59,12 +72,14 @@ function Login() {
       </nav>
 
       <div className="flex justify-center items-center h-[calc(100vh-80px)]">
-        <div className="bg-[#F8F9FA] p-8 rounded-xl shadow-lg max-w-md w-full mx-4 border-2 border-[var(--primary-blue)]">
+        <div className={`bg-[#F8F9FA] p-8 rounded-xl shadow-lg max-w-md w-full mx-4 border-2 border-purple-500 transition-all duration-700 ease-out delay-300 ${
+          isLoaded ? 'opacity-100 transform translate-y-0 scale-100' : 'opacity-0 transform translate-y-8 scale-95'
+        }`}>
           <div className="flex justify-center mb-6">
             <img src={banner} alt="Logo" className="h-16" />
           </div>
           
-          <h2 className="text-2xl font-bold text-center mb-6 text-[var(--primary-blue)]">
+          <h2 className="text-2xl font-bold text-center mb-6 text-purple-700">
             INICIAR SESIÓN
           </h2>
 
@@ -86,7 +101,7 @@ function Login() {
                   <Field
                     type="email"
                     name="email"
-                    className="w-full px-4 py-3 rounded-lg border-2 focus:outline-none focus:ring-2 focus:ring-[var(--primary-blue)] focus:border-[var(--primary-blue)]"
+                    className="w-full px-4 py-3 rounded-lg border-2 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
                     placeholder="Ingresa tu email"
                   />
                   {errors.email && touched.email && (
@@ -99,7 +114,7 @@ function Login() {
                   <Field
                     type="password"
                     name="password"
-                    className="w-full px-4 py-3 rounded-lg border-2 focus:outline-none focus:ring-2 focus:ring-[var(--primary-blue)] focus:border-[var(--primary-blue)]"
+                    className="w-full px-4 py-3 rounded-lg border-2 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
                     placeholder="Ingresa tu contraseña"
                   />
                   {errors.password && touched.password && (
@@ -110,13 +125,13 @@ function Login() {
                 <button
                   type="submit"
                   disabled={isSubmitting}
-                  className="w-full bg-[var(--primary-blue)] text-white py-3 rounded-lg hover:opacity-90 transition-all font-medium text-lg shadow-md disabled:opacity-50"
+                  className="w-full bg-gradient-to-r from-blue-600 to-purple-700 text-white py-3 rounded-lg hover:from-blue-700 hover:to-purple-800 transition-all font-medium text-lg shadow-md disabled:opacity-50 transform hover:scale-105"
                 >
                   {isSubmitting ? 'Iniciando sesión...' : 'Continuar'}
                 </button>
 
                 <div className='text-center mt-4'>
-                  <Link to="/olvido-password" className="text-[var(--primary-blue)] hover:underline text-sm">
+                  <Link to="/olvido-password" className="text-purple-600 hover:text-purple-800 hover:underline text-sm">
                     ¿Olvidaste tu contraseña?
                   </Link>
 
@@ -129,7 +144,7 @@ function Login() {
             <p className="text-gray-700 mb-2">¿No tienes una cuenta?</p>
             <Link
               to="/register"
-              className="text-[var(--primary-blue)] hover:underline font-medium"
+              className="text-purple-600 hover:text-purple-800 hover:underline font-medium"
             >
               Crear una nueva cuenta
             </Link>
