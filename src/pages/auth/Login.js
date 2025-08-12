@@ -19,6 +19,7 @@ function Login() {
   const navigate = useNavigate();
   const [error, setError] = useState('');
   const [isLoaded, setIsLoaded] = useState(false);
+  const [isTransitioning, setIsTransitioning] = useState(false);
 
   useEffect(() => {
     // Animación de entrada elegante
@@ -27,6 +28,16 @@ function Login() {
     }, 100);
     return () => clearTimeout(timer);
   }, []);
+
+  // Función para manejar transiciones elegantes
+  const handleNavigate = (path) => {
+    setIsTransitioning(true);
+    
+    // Animación de salida suave
+    setTimeout(() => {
+      navigate(path);
+    }, 600);
+  };
 
   const handleLogin = async (values, { setSubmitting }) => {
     try {
@@ -58,7 +69,7 @@ function Login() {
 
   return (
     <div className={`min-h-screen bg-[var(--primary-yellow)] transition-all duration-700 ease-out ${
-      isLoaded ? 'opacity-100 transform translate-y-0' : 'opacity-0 transform translate-y-4'
+      isLoaded && !isTransitioning ? 'opacity-100 transform translate-y-0' : 'opacity-0 transform translate-y-4'
     }`}>
       <nav className={`bg-gradient-to-r from-blue-600 to-purple-700 p-4 transition-all duration-500 ease-out delay-100 ${
         isLoaded ? 'opacity-100 transform translate-y-0' : 'opacity-0 transform -translate-y-4'
@@ -131,9 +142,13 @@ function Login() {
                 </button>
 
                 <div className='text-center mt-4'>
-                  <Link to="/olvido-password" className="text-purple-600 hover:text-purple-800 hover:underline text-sm">
+                  <button 
+                    type="button"
+                    onClick={() => handleNavigate('/olvido-password')}
+                    className="text-purple-600 hover:text-purple-800 hover:underline text-sm bg-transparent border-none cursor-pointer"
+                  >
                     ¿Olvidaste tu contraseña?
-                  </Link>
+                  </button>
 
                 </div>
               </Form>
@@ -142,12 +157,13 @@ function Login() {
 
           <div className="mt-8 text-center">
             <p className="text-gray-700 mb-2">¿No tienes una cuenta?</p>
-            <Link
-              to="/register"
-              className="text-purple-600 hover:text-purple-800 hover:underline font-medium"
+            <button
+              type="button"
+              onClick={() => handleNavigate('/register')}
+              className="text-purple-600 hover:text-purple-800 hover:underline font-medium bg-transparent border-none cursor-pointer"
             >
               Crear una nueva cuenta
-            </Link>
+            </button>
           </div>
         </div>
       </div>

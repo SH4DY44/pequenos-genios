@@ -19,6 +19,7 @@ import banner from "../../assets/images/banner.jpeg";
 import AddProfileModal from "../../components/profiles/AddProfileModal";
 import EditProfileModal from "../../components/profiles/EditProfileModal";
 import TutorPanel from "../console/TutorPanel";
+import { TutorService } from "../../services/tutorService";
 
 function ProfileSelection() {
   const [tutorName, setTutorName] = useState("");
@@ -32,6 +33,9 @@ function ProfileSelection() {
   const [selectedProfile, setSelectedProfile] = useState(null);
   const [showTutorPanel, setShowTutorPanel] = useState(false);
   const [tutorPanelProfileId, setTutorPanelProfileId] = useState(null);
+  const [showDeleteAccountModal, setShowDeleteAccountModal] = useState(false);
+  const [deletingAccount, setDeletingAccount] = useState(false);
+  const [deleteConfirmationText, setDeleteConfirmationText] = useState("");
   const menuRef = useRef(null);
 
   const fetchProfiles = async (userId) => {
@@ -116,6 +120,47 @@ function ProfileSelection() {
       console.error("Error signing out:", error);
       toast.error("Error al cerrar sesión");
       setLoggingOut(false);
+    }
+  };
+
+  const handleDeleteAccount = async () => {
+    if (deleteConfirmationText.toLowerCase() !== "eliminar") {
+      toast.error("Escribe 'eliminar' para confirmar");
+      return;
+    }
+
+    try {
+      setDeletingAccount(true);
+      
+      // Mostrar mensaje de progreso
+      toast.info("Eliminando cuenta y todos los datos asociados...", {
+        autoClose: false,
+        toastId: "deleting-account"
+      });
+
+      const resultado = await TutorService.eliminarCuentaTutor();
+      
+      // Cerrar el toast de progreso
+      toast.dismiss("deleting-account");
+
+      if (resultado.success) {
+        // Usar window.location.href para forzar la redirección al home
+        // Esto evita conflictos con el estado de autenticación
+        window.location.href = "/";
+      } else {
+        throw new Error(resultado.message);
+      }
+    } catch (error) {
+      console.error("Error eliminando cuenta:", error);
+      toast.dismiss("deleting-account");
+      
+      // Mostrar error específico
+      if (error.message.includes("volver a iniciar sesión")) {
+        toast.error("Por seguridad, necesitas volver a iniciar sesión antes de eliminar tu cuenta");
+      } else {
+        toast.error(error.message || "Error al eliminar la cuenta");
+      }
+      setDeletingAccount(false);
     }
   };
 
@@ -315,6 +360,17 @@ function ProfileSelection() {
                   >
                     <span className="mr-2">👨‍🏫</span>
                     Panel de Tutor
+                  </button>
+                  <hr className="my-1" />
+                  <button
+                    onClick={() => {
+                      setShowMenu(false);
+                      setShowDeleteAccountModal(true);
+                    }}
+                    className="w-full text-left px-4 py-2 hover:bg-red-50 text-red-600 flex items-center"
+                  >
+                    <span className="mr-2">🗑️</span>
+                    Eliminar Cuenta
                   </button>
                   <hr className="my-1" />
                   <button
@@ -655,6 +711,71 @@ function ProfileSelection() {
           navigate("/evaluation", { state: { profileId } })
         }
       />
+
+      {/* Modal de confirmación para eliminar cuenta */}
+      {showDeleteAccountModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-lg max-w-md w-full mx-4">
+            <div className="p-6">
+              <div className="text-center mb-6">
+                <div className="text-6xl mb-4">⚠️</div>
+                <h2 className="text-2xl font-bold text-red-600 mb-2">
+                  ¿Eliminar Cuenta?
+                </h2>
+                <p className="text-gray-600 mb-4">
+                  Esta acción es <strong>irreversible</strong> y eliminará:
+                </p>
+                <div className="text-left bg-red-50 p-4 rounded-lg mb-4">
+                  <ul className="text-sm text-red-800 space-y-1">
+                    <li>• Tu cuenta de tutor</li>
+                    <li>• Todos los perfiles de niños ({profiles.length})</li>
+                    <li>• Todo el progreso y evaluaciones</li>
+                    <li>• Todas las recompensas y logros</li>
+                  </ul>
+                </div>
+                <p className="text-sm text-gray-600 mb-4">
+                  Para confirmar, escribe <strong>"eliminar"</strong> en el campo de abajo:
+                </p>
+                <input
+                  type="text"
+                  value={deleteConfirmationText}
+                  onChange={(e) => setDeleteConfirmationText(e.target.value)}
+                  placeholder="Escribe 'eliminar' para confirmar"
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 text-center"
+                  disabled={deletingAccount}
+                />
+              </div>
+              
+              <div className="flex space-x-3">
+                <button
+                  onClick={() => {
+                    setShowDeleteAccountModal(false);
+                    setDeleteConfirmationText("");
+                  }}
+                  className="flex-1 px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 transition-colors"
+                  disabled={deletingAccount}
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={handleDeleteAccount}
+                  disabled={deletingAccount || deleteConfirmationText.toLowerCase() !== "eliminar"}
+                  className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors flex items-center justify-center"
+                >
+                  {deletingAccount ? (
+                    <>
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                      Eliminando...
+                    </>
+                  ) : (
+                    "Eliminar Cuenta"
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Overlay de carga para cierre de sesión */}
       {loggingOut && (

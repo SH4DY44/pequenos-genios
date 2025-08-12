@@ -42,6 +42,7 @@ function Register() {
   const [error, setError] = useState('');
   const [googleLoading, setGoogleLoading] = useState(false);
   const [isLoaded, setIsLoaded] = useState(false);
+  const [isTransitioning, setIsTransitioning] = useState(false);
 
   useEffect(() => {
     // Animación de entrada elegante
@@ -50,6 +51,16 @@ function Register() {
     }, 100);
     return () => clearTimeout(timer);
   }, []);
+
+  // Función para manejar transiciones elegantes
+  const handleNavigate = (path) => {
+    setIsTransitioning(true);
+    
+    // Animación de salida suave
+    setTimeout(() => {
+      navigate(path);
+    }, 600);
+  };
 
   const handleRegister = async (values, { setSubmitting }) => {
     try {
@@ -104,7 +115,7 @@ function Register() {
 
   return (
     <div className={`min-h-screen bg-[var(--primary-yellow)] transition-all duration-700 ease-out ${
-      isLoaded ? 'opacity-100 transform translate-y-0' : 'opacity-0 transform translate-y-4'
+      isLoaded && !isTransitioning ? 'opacity-100 transform translate-y-0' : 'opacity-0 transform translate-y-4'
     }`}>
       <nav className={`bg-gradient-to-r from-blue-600 to-purple-700 p-4 transition-all duration-500 ease-out delay-100 ${
         isLoaded ? 'opacity-100 transform translate-y-0' : 'opacity-0 transform -translate-y-4'
@@ -223,12 +234,13 @@ function Register() {
 
           <div className="mt-8 text-center">
             <p className="text-gray-700 mb-2">¿Ya tienes una cuenta?</p>
-            <Link
-              to="/login"
-              className="text-purple-600 hover:text-purple-800 hover:underline font-medium"
+            <button
+              type="button"
+              onClick={() => handleNavigate('/login')}
+              className="text-purple-600 hover:text-purple-800 hover:underline font-medium bg-transparent border-none cursor-pointer"
             >
               Iniciar sesión
-            </Link>
+            </button>
           </div>
         </div>
       </div>

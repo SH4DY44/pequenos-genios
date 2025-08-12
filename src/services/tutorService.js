@@ -3,8 +3,14 @@ import {
     doc, 
     getDoc, 
     updateDoc, 
+    collection,
+    query,
+    where,
+    getDocs,
+    writeBatch,
     serverTimestamp 
   } from 'firebase/firestore';
+  import { deleteUser } from 'firebase/auth';
   import { db, auth } from '../config/firebase';
   
   export class TutorService {
@@ -246,6 +252,193 @@ import {
           fechaRegistro: null,
           tiempoEnPlataforma: 0,
           ultimaActividad: null
+        };
+      }
+    }
+
+    /**
+     * Eliminar completamente la cuenta del tutor y todos sus datos asociados
+     * IMPORTANTE: Esta acción es irreversible
+     * @param {string} tutorId - ID del tutor (opcional, usa el actual si no se proporciona)
+     * @returns {Promise<Object>} - Resultado de la operación
+     */
+    static async eliminarCuentaTutor(tutorId = null) {
+      try {
+        const userId = tutorId || auth.currentUser?.uid;
+        if (!userId) {
+          throw new Error('No hay usuario autenticado');
+        }
+
+        const currentUser = auth.currentUser;
+        if (!currentUser) {
+          throw new Error('Usuario no encontrado para eliminación');
+        }
+
+        console.log('🗑️ Iniciando eliminación de cuenta del tutor:', userId);
+
+        // 1. Obtener todos los perfiles de niños asociados al tutor
+        const perfilesQuery = query(
+          collection(db, 'childProfiles'), 
+          where('tutorId', '==', userId)
+        );
+        const perfilesSnapshot = await getDocs(perfilesQuery);
+
+        // 2. Crear un lote de operaciones para eliminar todo de forma atómica
+        const batch = writeBatch(db);
+        let perfilesEliminados = 0;
+
+        // 3. Eliminar todos los perfiles de niños y sus datos asociados
+        for (const perfilDoc of perfilesSnapshot.docs) {
+          const perfilId = perfilDoc.id;
+          console.log('🧒 Eliminando perfil de niño:', perfilId);
+
+          // Eliminar el perfil del niño
+          batch.delete(doc(db, 'childProfiles', perfilId));
+
+          // Buscar y eliminar evaluaciones asociadas
+          const evaluacionesQuery = query(
+            collection(db, 'evaluaciones'),
+            where('profileId', '==', perfilId)
+          );
+          const evaluacionesSnapshot = await getDocs(evaluacionesQuery);
+          evaluacionesSnapshot.docs.forEach(evalDoc => {
+            batch.delete(doc(db, 'evaluaciones', evalDoc.id));
+          });
+
+          // Buscar y eliminar progreso/estadísticas
+          const progresoQuery = query(
+            collection(db, 'userProgress'),
+            where('profileId', '==', perfilId)
+          );
+          const progresoSnapshot = await getDocs(progresoQuery);
+          progresoSnapshot.docs.forEach(progDoc => {
+            batch.delete(doc(db, 'userProgress', progDoc.id));
+          });
+
+          // Buscar y eliminar recompensas
+          const recompensasQuery = query(
+            collection(db, 'rewards'),
+            where('profileId', '==', perfilId)
+          );
+          const recompensasSnapshot = await getDocs(recompensasQuery);
+          recompensasSnapshot.docs.forEach(rewDoc => {
+            batch.delete(doc(db, 'rewards', rewDoc.id));
+          });
+
+          perfilesEliminados++;
+        }
+
+        // 4. Eliminar el documento del tutor
+        batch.delete(doc(db, 'tutors', userId));
+
+        // 5. Ejecutar todas las eliminaciones de Firestore
+        await batch.commit();
+
+        console.log('✅ Datos de Firestore eliminados, procediendo a eliminar cuenta de Auth');
+
+        // 6. Finalmente, eliminar la cuenta de autenticación de Firebase Auth
+        // NOTA: Esto automáticamente deslogueará al usuario
+        await deleteUser(currentUser);
+
+        console.log('✅ Cuenta del tutor eliminada completamente:', {
+          tutorId: userId,
+          perfilesEliminados,
+          timestamp: new Date().toISOString()
+        });
+
+        return {
+          success: true,
+          message: 'Cuenta eliminada exitosamente',
+          details: {
+            tutorId: userId,
+            perfilesEliminados,
+            eliminadoEn: new Date()
+          }
+        };
+
+      } catch (error) {
+        console.error('❌ Error eliminando cuenta del tutor:', error);
+        
+        // Categorizar el error para dar un mensaje más específico
+        let errorMessage = 'Error desconocido al eliminar la cuenta';
+        
+        if (error.code === 'auth/requires-recent-login') {
+          errorMessage = 'Por seguridad, necesitas volver a iniciar sesión antes de eliminar tu cuenta';
+        } else if (error.code === 'permission-denied') {
+          errorMessage = 'No tienes permisos para realizar esta acción';
+        } else if (error.code === 'network-request-failed') {
+          errorMessage = 'Error de conexión. Verifica tu internet e intenta de nuevo';
+        } else if (error.message.includes('No hay usuario autenticado')) {
+          errorMessage = 'Sesión expirada. Inicia sesión de nuevo';
+        }
+
+        return {
+          success: false,
+          message: errorMessage,
+          error: error.code || error.message,
+          timestamp: new Date()
+        };
+      }
+    }
+
+    /**
+     * Verificar si el usuario puede eliminar su cuenta (validaciones de seguridad)
+     * @param {string} tutorId - ID del tutor (opcional)
+     * @returns {Promise<Object>} - Estado de elegibilidad para eliminación
+     */
+    static async verificarElegibilidadEliminacion(tutorId = null) {
+      try {
+        const userId = tutorId || auth.currentUser?.uid;
+        if (!userId) {
+          return {
+            puedeEliminar: false,
+            razon: 'No hay usuario autenticado',
+            requiereAccion: 'Iniciar sesión'
+          };
+        }
+
+        const currentUser = auth.currentUser;
+        if (!currentUser) {
+          return {
+            puedeEliminar: false,
+            razon: 'Usuario no encontrado',
+            requiereAccion: 'Volver a iniciar sesión'
+          };
+        }
+
+        // Verificar si la sesión es reciente (menos de 5 minutos)
+        const tiempoUltimoLogin = currentUser.metadata.lastSignInTime;
+        const ahora = new Date();
+        const tiempoTranscurrido = ahora - new Date(tiempoUltimoLogin);
+        const requiereReautenticacion = tiempoTranscurrido > (5 * 60 * 1000); // 5 minutos
+
+        // Contar perfiles asociados
+        const perfilesQuery = query(
+          collection(db, 'childProfiles'),
+          where('tutorId', '==', userId)
+        );
+        const perfilesSnapshot = await getDocs(perfilesQuery);
+        const numPerfiles = perfilesSnapshot.size;
+
+        return {
+          puedeEliminar: true,
+          requiereReautenticacion,
+          numeroPerfiles: numPerfiles,
+          advertencias: [
+            'Esta acción eliminará permanentemente tu cuenta',
+            `Se eliminarán ${numPerfiles} perfil(es) de niño(s)`,
+            'Se perderá todo el progreso y evaluaciones',
+            'Esta acción no se puede deshacer'
+          ],
+          ultimoLogin: tiempoUltimoLogin
+        };
+
+      } catch (error) {
+        console.error('Error verificando elegibilidad:', error);
+        return {
+          puedeEliminar: false,
+          razon: 'Error verificando datos de la cuenta',
+          requiereAccion: 'Intentar más tarde'
         };
       }
     }
