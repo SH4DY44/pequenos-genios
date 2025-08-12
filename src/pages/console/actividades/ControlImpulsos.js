@@ -330,12 +330,20 @@ function ControlImpulsos({ actividad, perfilNino, onComplete, onClose }) {
           {config.tiempoLimite && <p>Tiempo límite: {formatearTiempo(config.tiempoLimite)}</p>}
           <p>Puntos base: {config.puntosBase}</p>
         </div>
-        <button
-          onClick={() => setGameState(GAME_STATE.ESPERANDO_INICIO)}
-          className="px-6 py-3 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors font-medium"
-        >
-          ¡Comenzar!
-        </button>
+        <div className="flex space-x-3">
+          <button
+            onClick={onClose}
+            className="flex-1 bg-gray-300 hover:bg-gray-400 text-gray-700 font-bold py-3 px-4 rounded-lg transition-colors"
+          >
+            Cancelar
+          </button>
+          <button
+            onClick={() => setGameState(GAME_STATE.ESPERANDO_INICIO)}
+            className="flex-1 bg-red-500 hover:bg-red-600 text-white font-bold py-3 px-4 rounded-lg transition-colors"
+          >
+            ¡Comenzar!
+          </button>
+        </div>
       </div>
     </div>
   );
