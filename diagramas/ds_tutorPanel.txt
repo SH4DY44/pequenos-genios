@@ -1,0 +1,352 @@
+title DS TutorPanel - Panel de Control del Tutor
+
+actor Tutor
+participant "TutorPanel.js" as tutor_panel
+participant "App.js" as APP
+participant "React" as React
+participant "react-router-dom" as rrd
+participant "Firebase" as db
+participant "usePromocionNiveles" as promocion_hook
+participant "notificationEmailService" as email_service
+participant "reportService" as report_service
+participant "toast" as toast
+participant "obtenerInfoDiaActual" as utils
+
+entryspacing 0.7
+tutor_panel<-APP:<TutorPanel profileId={profileIdProp} />
+
+note over tutor_panel: === INICIALIZACIÓN DEL COMPONENTE ===
+
+tutor_panel->React:useState('progreso')
+tutor_panel<--React:[seccionActiva, setSeccionActiva]
+tutor_panel->React:useState(null)
+tutor_panel<--React:[perfilNino, setPerfilNino]
+tutor_panel->React:useState(true)
+tutor_panel<--React:[loading, setLoading]
+tutor_panel->React:useState(null)
+tutor_panel<--React:[estadisticas, setEstadisticas]
+tutor_panel->React:useState([])
+tutor_panel<--React:[actividadesRecientes, setActividadesRecientes]
+tutor_panel->React:useState(false)
+tutor_panel<--React:[showNuevaRutinaModal, setShowNuevaRutinaModal]
+tutor_panel->React:useState(null)
+tutor_panel<--React:[editingRutina, setEditingRutina]
+tutor_panel->React:useState([])
+tutor_panel<--React:[rutinasPersonalizadas, setRutinasPersonalizadas]
+tutor_panel->React:useState(new Date())
+tutor_panel<--React:[tiempoActual, setTiempoActual]
+tutor_panel->React:useState(false)
+tutor_panel<--React:[guardando, setGuardando]
+tutor_panel->React:useState({configuracion compleja})
+tutor_panel<--React:[configuracion, setConfiguracion]
+
+note over tutor_panel: === OBTENER PROFILE ID ===
+
+tutor_panel->rrd:useLocation()
+tutor_panel<--rrd:location
+tutor_panel->React:new URLSearchParams(location.search)
+tutor_panel<--React:urlParams
+tutor_panel->React:profileIdProp || urlParams.get('profileId') || location.state?.profileId
+tutor_panel<--React:profileId
+
+note over tutor_panel: === HOOK PERSONALIZADO DE PROMOCIÓN ===
+
+tutor_panel->promocion_hook:usePromocionNiveles(profileId, perfilNino)
+tutor_panel<--promocion_hook:{\n  evaluacionActual,\n  promocionDisponible,\n  cargandoEvaluacion,\n  promoverNivel,\n  porcentajeCumplimiento,\n  criteriosCumplidos,\n  totalCriterios,\n  sugerencias\n}
+
+note over tutor_panel: === FUNCIONES CALLBACK OPTIMIZADAS ===
+
+tutor_panel->React:const calcularEstadisticas = useCallback((datosNino, actividades = []) => {\n  const hoy = new Date();\n  const inicioHoy = new Date(hoy.setHours(0, 0, 0, 0));\n  const actividadesHoy = actividades.filter(act => \n    new Date(act.timestamp?.toDate?.() || act.timestamp) >= inicioHoy\n  ).length;\n  const tiempoHoy = actividadesHoy * 10;\n  const puntosEsaSemana = Math.floor((datosNino.puntosTotales || 0) * 0.3);\n  setEstadisticas({...estadisticas calculadas});\n}, [])
+tutor_panel<--React:calcularEstadisticas function memoizada
+
+tutor_panel->React:const cargarActividadesRecientes = useCallback(async () => {\n  if (!profileId) return [];\n  try {\n    const actividadesRef = collection(db, "activitySessions");\n    // Query optimizada con timeout y fallback\n  } catch (error) {\n    toast.warning('No se pudieron cargar las actividades recientes');\n    return [];\n  }\n}, [profileId])
+tutor_panel<--React:cargarActividadesRecientes function memoizada
+
+tutor_panel->React:const cargarDatosNino = useCallback(async () => {\n  try {\n    setLoading(true);\n    const timeoutPromise = new Promise((_, reject) => \n      setTimeout(() => reject(new Error('Timeout loading profile')), 10000)\n    );\n    const perfilRef = doc(db, "childProfiles", profileId);\n    const perfilDoc = await Promise.race([getDoc(perfilRef), timeoutPromise]);\n    // Procesamiento de datos...\n  } catch (error) {\n    // Manejo de errores específicos\n  } finally {\n    setLoading(false);\n  }\n}, [profileId, calcularEstadisticas, cargarActividadesRecientes])
+tutor_panel<--React:cargarDatosNino function memoizada
+
+note over tutor_panel: === USEEFFECT #1: ACTUALIZACIÓN DE TIEMPO ===
+
+tutor_panel->React:useEffect(() => {\n  const intervalo = setInterval(() => {\n    setTiempoActual(new Date());\n  }, 60000);\n  return () => clearInterval(intervalo);\n}, [])
+tutor_panel<--React:interval timer establecido
+
+note over React: Timer se ejecuta cada 60 segundos para actualizar tiempo
+
+note over tutor_panel: === USEEFFECT #2: CARGA PRINCIPAL DE DATOS ===
+
+tutor_panel->React:useEffect(() => {\n  if (profileId) {\n    cargarDatosNino();\n  }\n}, [profileId])
+tutor_panel<--React:
+
+alt profileId existe
+    tutor_panel<-React:cargarDatosNino()
+    
+    note over tutor_panel: === PASO 1: PREPARAR CARGA ===
+    
+    tutor_panel->React:console.log('📂 Iniciando carga de datos del niño:', profileId)
+    tutor_panel->React:setLoading(true)
+    tutor_panel<--React:loading = true
+    
+    note over tutor_panel: === PASO 2: CREAR TIMEOUT Y PROMESAS ===
+    
+    tutor_panel->React:const timeoutPromise = new Promise((_, reject) => \n  setTimeout(() => reject(new Error('Timeout loading profile')), 10000)\n)
+    tutor_panel->db:doc(db, "childProfiles", profileId)
+    tutor_panel<--db:perfilRef
+    tutor_panel->db:getDoc(perfilRef)
+    tutor_panel<--db:perfilPromise
+    
+    note over tutor_panel: === PASO 3: RACE CONDITION ENTRE TIMEOUT Y CARGA ===
+    
+    tutor_panel->React:Promise.race([perfilPromise, timeoutPromise])
+    
+    alt Carga exitosa (antes de timeout)
+        React-->tutor_panel:perfilDoc
+        
+        alt perfilDoc.exists()
+            tutor_panel->React:const datosNino = { ...perfilDoc.data(), id: profileId }
+            tutor_panel->React:console.log('✅ Datos del perfil cargados:', datosNino)
+            tutor_panel->React:setPerfilNino(datosNino)
+            tutor_panel<--React:perfilNino state actualizado
+            
+            note over tutor_panel: === PASO 4: CARGAR CONFIGURACIÓN GUARDADA ===
+            
+            alt datosNino.configuracionTutor existe
+                tutor_panel->React:setConfiguracion(datosNino.configuracionTutor)
+                tutor_panel<--React:configuracion actualizada con datos guardados
+            else Usar configuración por defecto
+                note over tutor_panel: Mantener configuración inicial
+            end
+            
+            note over tutor_panel: === PASO 5: CARGAR RUTINAS PERSONALIZADAS ===
+            
+            alt datosNino.rutinasPersonalizadas existe
+                tutor_panel->React:setRutinasPersonalizadas(datosNino.rutinasPersonalizadas)
+                tutor_panel<--React:rutinas personalizadas cargadas
+            else Sin rutinas personalizadas
+                note over tutor_panel: Array de rutinas permanece vacío
+            end
+            
+            note over tutor_panel: === PASO 6: CARGAR ACTIVIDADES RECIENTES ASÍNCRONAMENTE ===
+            
+            tutor_panel->React:cargarActividadesRecientes().then(actividades => {...}).catch(error => {...})
+            
+            tutor_panel<-React:cargarActividadesRecientes()
+            
+            alt Carga de actividades exitosa
+                tutor_panel->db:collection(db, "activitySessions")
+                tutor_panel<--db:actividadesRef
+                
+                note over tutor_panel: === INTENTAR QUERY OPTIMIZADA PRIMERO ===
+                
+                tutor_panel->db:query(\n  actividadesRef,\n  where("childProfileId", "==", profileId),\n  orderBy("timestamp", "desc"),\n  limit(10)\n)
+                tutor_panel<--db:q (query optimizada)
+                
+                tutor_panel->React:const timeoutPromise = new Promise((_, reject) => \n  setTimeout(() => reject(new Error('Timeout')), 10000)\n)
+                tutor_panel->db:getDocs(q)
+                tutor_panel<--db:queryPromise
+                tutor_panel->React:Promise.race([queryPromise, timeoutPromise])
+                
+                alt Query optimizada exitosa
+                    React-->tutor_panel:snapshot
+                    tutor_panel->React:const actividades = snapshot.docs.map(doc => ({\n  id: doc.id,\n  ...doc.data()\n}))
+                    tutor_panel->React:console.log('✅ Actividades cargadas:', actividades.length)
+                    tutor_panel->React:setActividadesRecientes(actividades)
+                    tutor_panel<--React:actividades recientes actualizadas
+                    tutor_panel->React:calcularEstadisticas(datosNino, actividades)
+                    tutor_panel<--React:estadísticas calculadas y actualizadas
+                    
+                else Error en query optimizada (fallback)
+                    tutor_panel->React:console.warn('⚠️ Error con query optimizada, usando fallback simple:', queryError.message)
+                    
+                    note over tutor_panel: === FALLBACK: QUERY SIMPLE SIN ORDERBY ===
+                    
+                    tutor_panel->db:query(actividadesRef, limit(100))
+                    tutor_panel<--db:qSimple
+                    tutor_panel->db:getDocs(qSimple)
+                    tutor_panel<--db:snapshotSimple
+                    
+                    tutor_panel->React:const actividadesFiltradas = snapshotSimple.docs\n  .map(doc => ({ id: doc.id, ...doc.data() }))\n  .filter(act => act.childProfileId === profileId)\n  .sort((a, b) => {\n    const timeA = a.timestamp?.toDate?.() || new Date(a.timestamp);\n    const timeB = b.timestamp?.toDate?.() || new Date(b.timestamp);\n    return timeB - timeA;\n  })\n  .slice(0, 10)
+                    
+                    tutor_panel->React:console.log('✅ Actividades cargadas (fallback):', actividadesFiltradas.length)
+                    tutor_panel->React:setActividadesRecientes(actividadesFiltradas)
+                    tutor_panel<--React:actividades recientes actualizadas (fallback)
+                    tutor_panel->React:calcularEstadisticas(datosNino, actividadesFiltradas)
+                    tutor_panel<--React:estadísticas calculadas con datos fallback
+                end
+                
+            else Error cargando actividades
+                tutor_panel->React:console.error('❌ Error cargando actividades recientes:', error)
+                tutor_panel->toast:toast.warning('No se pudieron cargar las actividades recientes')
+                tutor_panel->React:setActividadesRecientes([])
+                tutor_panel<--React:actividades recientes como array vacío
+                tutor_panel->React:calcularEstadisticas(datosNino, [])
+                tutor_panel<--React:estadísticas calculadas sin actividades
+            end
+            
+        else Perfil no existe
+            tutor_panel->React:console.error('❌ No se encontró el perfil del niño')
+            tutor_panel->toast:toast.error('No se encontró el perfil del niño')
+        end
+        
+    else Timeout en carga
+        tutor_panel->React:catch (error.message === 'Timeout loading profile')
+        tutor_panel->toast:toast.error('La carga está tomando demasiado tiempo. Verifica tu conexión.')
+    else Error general
+        tutor_panel->React:catch (error general)
+        tutor_panel->React:console.error('❌ Error cargando datos del niño:', error)
+        tutor_panel->toast:toast.error('Error al cargar los datos del niño')
+    end
+    
+    note over tutor_panel: === PASO 7: FINALIZAR CARGA ===
+    
+    tutor_panel->React:finally setLoading(false)
+    tutor_panel<--React:loading = false
+    tutor_panel->React:console.log('🏁 Carga de datos finalizada')
+    
+    note over React: Re-render con loading=false y datos cargados
+    React->APP:Re-render TutorPanel con datos completos
+    tutor_panel-->APP:jsx de TutorPanel completamente cargado
+    Tutor<-APP:Mostrar Panel del Tutor con datos del niño
+    
+else Sin profileId
+    note over tutor_panel: No ejecutar carga de datos
+end
+
+note over tutor_panel,APP: === INTERFAZ PRINCIPAL CARGADA ===
+
+alt loading = true
+    tutor_panel-->APP:jsx con spinner de carga
+    Tutor<-APP:Mostrar indicador de carga
+else loading = false
+    tutor_panel-->APP:jsx completo del panel
+    Tutor<-APP:Panel del Tutor completamente funcional
+end
+
+note over tutor_panel: === INTERACCIONES DEL USUARIO ===
+
+alt Tutor navega entre secciones
+    Tutor->tutor_panel:Click en sección (progreso, horarios, metas, reportes)
+    activate tutor_panel
+    
+    tutor_panel->React:setSeccionActiva(nuevaSeccion)
+    tutor_panel<--React:seccionActiva actualizada
+    
+    React->APP:Re-render con nueva sección activa
+    Tutor<-APP:Mostrar contenido de la sección seleccionada
+    
+    deactivate tutor_panel
+
+else Tutor actualiza configuración
+    Tutor->tutor_panel:Modificar configuración de recordatorios/metas
+    activate tutor_panel
+    
+    tutor_panel->React:actualizarConfiguracion(nuevaConfig)
+    tutor_panel->React:setGuardando(true)
+    tutor_panel<--React:guardando = true
+    
+    tutor_panel->db:doc(db, "childProfiles", profileId)
+    tutor_panel<--db:perfilRef
+    tutor_panel->db:updateDoc(perfilRef, {\n  configuracionTutor: nuevaConfig\n})
+    
+    alt Actualización exitosa
+        db-->tutor_panel:Configuración guardada
+        tutor_panel->React:setConfiguracion(nuevaConfig)
+        tutor_panel<--React:configuración local actualizada
+        
+        alt nuevaConfig.recordatorios.notificacionesEmail = true
+            tutor_panel->email_service:enviarNotificacionConfiguracion(profileId, nuevaConfig)
+            
+            alt Envío de email exitoso
+                email_service-->tutor_panel:Email enviado exitosamente
+                tutor_panel->toast:toast.success('Configuración actualizada y notificación enviada')
+            else Error en envío de email
+                email_service-->tutor_panel:Error en envío
+                tutor_panel->toast:toast.warning('Configuración guardada, pero hubo un error al enviar la notificación')
+            end
+        else Sin notificación por email
+            tutor_panel->toast:toast.success('Configuración actualizada exitosamente')
+        end
+        
+    else Error en actualización
+        db-->tutor_panel:Error al guardar
+        tutor_panel->React:console.error('Error actualizando configuración:', error)
+        tutor_panel->toast:toast.error('Error al actualizar la configuración')
+    end
+    
+    tutor_panel->React:setGuardando(false)
+    tutor_panel<--React:guardando = false
+    
+    React->APP:Re-render con configuración actualizada
+    Tutor<-APP:Ver cambios reflejados en la interfaz
+    
+    deactivate tutor_panel
+
+else Tutor genera reporte
+    Tutor->tutor_panel:Solicitar generación de reporte (semanal/mensual/completo)
+    activate tutor_panel
+    
+    tutor_panel->React:generarReporte(tipoReporte)
+    tutor_panel->React:setGuardando(true)
+    tutor_panel<--React:guardando = true (indicador de proceso)
+    
+    tutor_panel->report_service:reportService.generarReporte({\n  profileId,\n  tipo: tipoReporte,\n  datos: perfilNino,\n  estadisticas,\n  actividadesRecientes\n})
+    
+    alt Generación de reporte exitosa
+        report_service-->tutor_panel:PDF generado exitosamente
+        tutor_panel->React:Descargar archivo PDF
+        tutor_panel->toast:toast.success(`Reporte ${tipoReporte} generado exitosamente`)
+    else Error en generación
+        report_service-->tutor_panel:Error en generación
+        tutor_panel->React:console.error('Error generando reporte:', error)
+        tutor_panel->toast:toast.error('Error al generar el reporte')
+    end
+    
+    tutor_panel->React:setGuardando(false)
+    tutor_panel<--React:guardando = false
+    
+    deactivate tutor_panel
+
+else Tutor gestiona rutinas personalizadas
+    Tutor->tutor_panel:Crear/editar/eliminar rutina personalizada
+    activate tutor_panel
+    
+    tutor_panel->React:guardarRutina(datosRutina)
+    
+    alt Modo edición
+        tutor_panel->React:const nuevasRutinas = rutinasPersonalizadas.map(r => \n  r.id === editingRutina.id ? { ...datosRutina, id: editingRutina.id } : r\n)
+    else Modo creación
+        tutor_panel->React:const nuevasRutinas = [...rutinasPersonalizadas, \n  { ...datosRutina, id: Date.now(), activa: true }\n]
+    end
+    
+    tutor_panel->React:setRutinasPersonalizadas(nuevasRutinas)
+    tutor_panel<--React:rutinas locales actualizadas
+    
+    tutor_panel->db:doc(db, "childProfiles", profileId)
+    tutor_panel<--db:perfilRef
+    tutor_panel->db:updateDoc(perfilRef, {\n  rutinasPersonalizadas: nuevasRutinas\n})
+    
+    alt Guardado exitoso
+        db-->tutor_panel:Rutinas guardadas en Firebase
+        tutor_panel->React:setShowNuevaRutinaModal(false)
+        tutor_panel->React:setEditingRutina(null)
+        tutor_panel<--React:modal cerrado y modo edición limpiado
+        tutor_panel->toast:toast.success(editingRutina ? 'Rutina actualizada exitosamente' : 'Nueva rutina creada exitosamente')
+    else Error en guardado
+        db-->tutor_panel:Error al guardar
+        tutor_panel->React:console.error('Error guardando rutina:', error)
+        tutor_panel->toast:toast.error('Error al guardar la rutina')
+    end
+    
+    React->APP:Re-render con rutinas actualizadas
+    Tutor<-APP:Ver rutinas actualizadas en la interfaz
+    
+    deactivate tutor_panel
+
+end
+
+note over tutor_panel: === CLEANUP AL DESMONTAR COMPONENTE ===
+
+tutor_panel->React:useEffect cleanup (timer interval)
+React->React:clearInterval(intervalo)
+note over React: Timer de actualización de tiempo limpiado
+
+note over tutor_panel,APP: === COMPONENTE COMPLETAMENTE FUNCIONAL ===

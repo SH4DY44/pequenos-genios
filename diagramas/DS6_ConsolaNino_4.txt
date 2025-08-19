@@ -1,0 +1,317 @@
+title 6.- Secuencias iniciadas desde la IU #6 Consola del Niño
+
+actor Usuario
+participant "ConsolaNino.js" as consola_page
+participant "App.js" as APP
+participant "React" as React
+participant "react-router-dom" as rrd
+participant "Firebase" as db
+participant "onSnapshot" as snapshot
+participant "RewardsService" as rewards
+participant "NotificationScheduler" as notif
+participant "toast" as toast
+participant "Actividades.js" as actividades_comp
+participant "Memorama.js" as memorama_comp
+participant "SecuenciasPalabras.js" as eco_comp
+
+entryspacing 0.7
+consola_page<-APP:<ConsolaNino />
+
+consola_page->React
+consola_page->React:useState(null);
+consola_page<--React:[perfilNino, setPerfilNino]
+
+consola_page->React:useState("actividades");
+consola_page<--React:[seccionActiva, setSeccionActiva];
+consola_page->React:useState(true);
+consola_page<--React:[loading, setLoading];
+consola_page->React:useState(null);
+consola_page<--React:[juegoSeleccionado, setJuegoSeleccionado];
+consola_page->React:useState([]);
+consola_page<--React:[nuevosLogros, setNuevosLogros];
+consola_page->rrd:useNavigate();
+consola_page<--rrd:navigate
+
+consola_page->rrd:useLocation();
+consola_page<--rrd:location
+consola_page->rrd:location.state?.profileId;
+consola_page<--rrd:profileId
+consola_page->React:useEffect( inicializarRecompensas, [profileId] );
+consola_page<--React:
+consola_page->React:useEffect(cbEffectProfileId, [ profileId, navigate ] );
+consola_page<--React:
+consola_page->React:useEffect( cbverificarLogros, [ perfilNino, profileId ] );
+consola_page<--React:
+
+alt loading
+consola_page-->APP:jsx
+Usuario<-APP:Loading
+
+consola_page<-React:inicializarRecompensas()
+alt profileId existe
+    consola_page->db:doc(db, "childProfiles", profileId)
+    consola_page<--db:perfilRef
+    consola_page->db:getDoc(perfilRef)
+    consola_page<--db:perfilDoc
+    alt !perfilDoc.exists() || !puntosTotales
+        consola_page->rewards:inicializarSistemaRecompensas(profileId)
+        rewards->db:updateDoc(perfilRef, {\n  puntosTotales: 0,\n  estrellasTotales: 0,\n  logrosObtenidos: [],\n  racha: 0\n})
+        db-->rewards:
+        rewards-->consola_page:
+    else Sistema ya existe
+    end
+else Sin profileId
+end
+consola_page-->React:
+
+consola_page<-React:cbEffectProfileId()
+
+alt profileId válido
+    consola_page->React:setLoading(true)
+    consola_page<--React:
+    consola_page->db:doc(db, "childProfiles", profileId)
+    consola_page<--db:perfilRef
+    consola_page->snapshot:onSnapshot(perfilRef, (docSnap) => {\n  if (docSnap.exists()) {\n    setPerfilNino({ ...docSnap.data(), id: profileId });\n  } else {\n    console.log("El perfil del niño no existe, redirigiendo...");\n    navigate("/profile-selection");\n  }\n  setLoading(false);\n}, (error) => {\n  console.error("Error al escuchar el perfil en tiempo real:", error);\n  setLoading(false);\n  toast.error("Error al cargar el perfil. Intenta de nuevo.");\n})
+    consola_page<--snapshot:unsubscribe function
+    consola_page->React:return () => unsubscribe()
+    consola_page<--React:cleanup function registered
+    
+    note over snapshot: Listener permanente establecido - escucha cambios en tiempo real
+    
+    alt Primera ejecución o cambio en Firebase
+        snapshot->consola_page:Ejecutar función inline (docSnap) => {...}
+        
+        alt docSnap.exists()
+            consola_page->React:setPerfilNino({ ...docSnap.data(), id: profileId })
+            consola_page<--React:perfilNino state actualizado
+            consola_page->React:setLoading(false)
+            consola_page<--React:loading = false
+            
+            note over React: Cambio de estado trigger re-render
+            React->APP:Re-render completo con perfil cargado
+            consola_page-->APP:jsx de IU 6 - Consola del Niño
+            Usuario<-APP:Mostrar IU 6 - Consola del Niño
+            
+            note over React: Trigger useEffect #3 por cambio en perfilNino
+            consola_page<-React:cbverificarLogros()
+            
+            alt perfilNino && profileId existen
+                consola_page->React:verificarNuevosLogros()
+                consola_page->rewards:RewardsService.verificarYOtorgarLogros(profileId, perfilNino)
+                rewards->db:Analizar estadísticas del perfil vs condiciones de logros
+                
+                alt Nuevos logros encontrados
+                    rewards-->consola_page:logros = [logro1, logro2, ...]
+                    consola_page->React:setNuevosLogros(logros)
+                    consola_page<--React:nuevosLogros state actualizado
+                    React->APP:Re-render con modal de logros
+                    Usuario<-APP:Mostrar notificaciones de nuevos logros
+                else Sin nuevos logros
+                    rewards-->consola_page:logros = []
+                end
+            else Perfil aún no cargado
+                note over consola_page: No ejecutar verificación
+            end
+            
+        else !docSnap.exists()
+            consola_page->React:console.log("El perfil del niño no existe, redirigiendo...")
+            consola_page->rrd:navigate("/profile-selection")
+            APP<-rrd:Render("/profile-selection")
+            == ir a 4 ==
+        end
+        
+        consola_page->React:setLoading(false)
+        consola_page<--React:loading = false
+    end
+    
+    alt Error en listener
+        snapshot->consola_page:Ejecutar función inline (error) => {...}
+        consola_page->React:console.error("Error al escuchar el perfil en tiempo real:", error)
+        consola_page->React:setLoading(false)
+        consola_page<--React:loading = false
+        consola_page->toast:toast.error("Error al cargar el perfil. Intenta de nuevo.")
+        React->APP:Re-render con error
+    end
+    
+else Sin profileId
+    consola_page->rrd:navigate("/profile-selection")
+    APP<-rrd:Render("/profile-selection")
+    == ir a 4 ==
+end
+
+note over React,APP: Render final - loading=false, perfil cargado
+
+note over consola_page,APP: === INTERFAZ PRINCIPAL CARGADA ===
+
+consola_page-->APP:jsx completo de ConsolaNino
+Usuario<-APP:IU 6 - Consola del Niño completamente funcional
+
+alt Usuario navega entre secciones
+    Usuario->consola_page:Click en sección (actividades, juegos, estadísticas, notificaciones, recompensas)
+    activate consola_page
+    
+    consola_page->React:setSeccionActiva(seccion.id);\nsetJuegoSeleccionado(null);
+    
+    alt Sección = "actividades"
+        React->actividades_comp:<Actividades perfilNino={perfilNino} />
+        actividades_comp-->React:jsx
+        React->APP:Render sección actividades
+        Usuario<-APP:Mostrar actividades disponibles
+        == ir a 11==
+    else Sección = "juegos"  
+        React->APP:Render selector de juegos
+        Usuario<-APP:Mostrar lista de juegos (Memorama, Eco, Halli)
+        == ir a 7==
+    else Sección = "estadisticas"
+        React->React:<Estadisticas perfilNino={perfilNino} />
+        React->APP:Render estadísticas con gráficos
+        Usuario<-APP:Mostrar progreso y estadísticas
+        == ir a 8==
+    else Sección = "notificaciones"
+        React->React:<NotificationCenter />
+        React->APP:Render centro de notificaciones
+        Usuario<-APP:Mostrar notificaciones y recordatorios
+        == ir a 9==
+    else Sección = "recompensas"
+        React->React:<RewardsDashboard perfilNino={perfilNino} />
+        React->APP:Render dashboard de recompensas
+        Usuario<-APP:Mostrar puntos, estrellas y logros
+        == ir a 34 ==
+    end
+    deactivate consola_page
+
+else Usuario selecciona juego específico
+    Usuario->consola_page:Click en juego (Memorama, Eco, Halli Galli)
+    activate consola_page
+    
+    consola_page->React:setJuegoSeleccionado(nombreJuego)
+    
+    alt Juego = "memorama"
+        React->memorama_comp:<Memorama \n  perfilNino={perfilNino} \n  onScoreUpdate={handleScoreUpdate} \n  onClose={() => setJuegoSeleccionado(null)} \n/>
+        memorama_comp-->React:jsx del juego
+        React->APP:Render juego Memorama
+        Usuario<-APP:Jugar Memorama
+        == ir a 21==
+    else Juego = "eco"
+        React->eco_comp:<SecuenciasPalabras \n  perfilNino={perfilNino} \n  onScoreUpdate={handleScoreUpdate} \n  onClose={() => setJuegoSeleccionado(null)} \n/>
+        eco_comp-->React:jsx del juego
+        React->APP:Render juego Eco
+        Usuario<-APP:Jugar Secuencias de Palabras
+        == ir a 23==
+    else Juego = "halli"
+        React->React:<HalliGalli \n  perfilNino={perfilNino} \n  onScoreUpdate={handleScoreUpdate} \n  onClose={() => setJuegoSeleccionado(null)} \n/>
+        React->APP:Render juego Halli Galli
+        Usuario<-APP:Jugar Halli Galli
+        == ir a 26==
+    end
+    deactivate consola_page
+
+else Usuario completa actividad/juego (callback onScoreUpdate)
+    Usuario->consola_page:Actividad/Juego completado con puntuación
+    activate consola_page
+    
+    consola_page->React:handleScoreUpdate(gameData) {\n  puntos: number,\n  estrellas: number,\n  nombreJuego: string,\n  tipoJuego: string,\n  nivel: string,\n  perfecto: boolean,\n  esActividad: boolean\n}
+    
+    note over consola_page: Paso 1: Actualizar racha diaria
+    consola_page->React:await actualizarRachaDiaria()
+    consola_page->React:const hoy = new Date().toDateString()
+    consola_page->db:doc(db, 'childProfiles', profileId)
+    consola_page<--db:perfilRef
+    consola_page->React:const ultimaActividad = perfilNino?.ultimaActividad?.toDate()?.toDateString()
+    
+    alt ultimaActividad !== hoy
+        consola_page->React:const ayer = new Date(); ayer.setDate(ayer.getDate() - 1)
+        consola_page->React:const ayerString = ayer.toDateString()
+        consola_page->React:let nuevaRacha = 1
+        
+        alt ultimaActividad === ayerString
+            consola_page->React:nuevaRacha = (perfilNino.racha || 0) + 1
+        else Racha rota
+            consola_page->React:nuevaRacha = 1
+        end
+        
+        consola_page->db:updateDoc(perfilRef, {\n  racha: nuevaRacha,\n  ultimaActividad: Timestamp.now()\n})
+        db-->consola_page:Racha actualizada
+    else Ya jugó hoy
+        note over consola_page: No actualizar racha
+    end
+    
+    note over consola_page: Paso 2: Agregar puntos si los hay
+    alt gameData.puntos > 0
+        consola_page->rewards:RewardsService.agregarPuntos(profileId, gameData.puntos, `${gameData.nombreJuego} - Nivel: ${gameData.nivel || 'básico'}`)
+        
+        rewards->db:updateDoc(perfilRef, {\n  puntosTotales: increment(gameData.puntos),\n  historialPuntos: arrayUnion({\n    fecha: Timestamp.now(),\n    puntos: gameData.puntos,\n    razon: mensaje\n  })\n})
+        db-->rewards:Puntos guardados en Firebase
+        rewards-->consola_page:Puntos agregados exitosamente
+    else Sin puntos
+        note over consola_page: Saltar agregación de puntos
+    end
+    
+    note over consola_page: Paso 3: Agregar estrellas si aplica
+    alt gameData.estrellas > 0 && !gameData.esActividad
+        consola_page->rewards:RewardsService.agregarEstrellas(profileId, gameData.estrellas, `${gameData.nombreJuego || 'Juego'} completado`)
+        
+        rewards->db:updateDoc(perfilRef, {\n  estrellasTotales: increment(gameData.estrellas)\n})
+        db-->rewards:Estrellas guardadas en Firebase
+        rewards-->consola_page:Estrellas agregadas exitosamente
+    else Sin estrellas o es actividad
+        note over consola_page: Actividades manejan estrellas directamente
+    end
+    
+    note over consola_page: Paso 4: Preparar datos actualizados para detección de logros
+    consola_page->React:const datosActualizados = {\n  ...perfilNino,\n  actividadesCompletadas: (perfilNino.actividadesCompletadas || 0) + 1,\n  puntosTotales: (perfilNino.puntosTotales || 0) + gameData.puntos\n}
+    
+    consola_page->React:datosActualizados[`estadisticasJuegos.${gameData.tipoJuego || 'general'}`] = {\n  ...perfilNino.estadisticasJuegos?.[gameData.tipoJuego || 'general'],\n  victorias: (victorias || 0) + 1,\n  puntosTotales: (puntosTotales || 0) + gameData.puntos,\n  ultimoJuego: Timestamp.now()\n}
+    
+    alt gameData.perfecto
+        consola_page->React:datosActualizados.actividadesPerfectas = (perfilNino.actividadesPerfectas || 0) + 1
+    else No perfecto
+        note over consola_page: Mantener contador de perfectas sin cambios
+    end
+    
+    note over consola_page: Paso 5: Verificar y otorgar nuevos logros
+    consola_page->rewards:RewardsService.verificarYOtorgarLogros(profileId, datosActualizados)
+    rewards->db:Verificar todas las condiciones de logros contra estadísticas actualizadas
+    
+    alt Nuevos logros alcanzados
+        rewards-->consola_page:nuevosLogros = [logro1, logro2, ...]
+        consola_page->React:setNuevosLogros(prevLogros => [...prevLogros, ...nuevosLogros])
+        consola_page<--React:nuevosLogros state actualizado
+        consola_page->toast:toast.success(`🎉 ¡${nuevosLogros.length} nuevo${nuevosLogros.length > 1 ? 's' : ''} logro${nuevosLogros.length > 1 ? 's' : ''}!`)
+        React->APP:Re-render con modal de logros
+    else Sin nuevos logros
+        rewards-->consola_page:nuevosLogros = []
+    end
+    
+    note over consola_page: Paso 6: Mostrar resumen de recompensas obtenidas
+    consola_page->React:const mensajeRecompensas = []
+    
+    alt gameData.puntos > 0
+        consola_page->React:mensajeRecompensas.push(`+${gameData.puntos} puntos`)
+    end
+    
+    alt gameData.estrellas > 0
+        consola_page->React:mensajeRecompensas.push(`+${gameData.estrellas} estrella${gameData.estrellas > 1 ? 's' : ''}`)
+    end
+    
+    alt mensajeRecompensas.length > 0
+        consola_page->toast:toast.success(`¡Recompensas obtenidas! ${mensajeRecompensas.join(', ')}`)
+    end
+    
+    note over snapshot: onSnapshot detecta cambios en Firebase automáticamente
+    snapshot->consola_page:callback_onSnapshot(docSnap actualizado)
+    consola_page->React:setPerfilNino({ ...docSnap.data(), id: profileId })
+    React->APP:Re-render automático con datos actualizados
+    Usuario<-APP:Ver puntuación actualizada en tiempo real
+    
+    deactivate consola_page
+
+else Usuario navega a otra sección
+    Usuario->consola_page:Click en "Cambiar Perfil"
+    consola_page->rrd:navigate("/profile-selection")
+    APP<-rrd:Render("/profile-selection")
+    == ir a 4 ==
+
+end
+
+end

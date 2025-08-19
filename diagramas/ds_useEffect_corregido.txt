@@ -1,0 +1,85 @@
+title Secuencia del useEffect - ConsolaNino
+
+actor Héctor
+participant "App.js" as APP
+participant "ConsolaNino.js" as consola_page
+participant "React" as React
+participant "RewardsService" as rewards
+
+entryspacing 0.6
+
+note over APP: === MONTAJE DEL COMPONENTE ===
+consola_page<-APP: <ConsolaNino />
+
+note over consola_page: === INICIALIZACIÓN DE ESTADOS ===
+consola_page->React: useState(null)
+consola_page<--React: [perfilNino, setPerfilNino]
+consola_page->React: useState("actividades")
+consola_page<--React: [seccionActiva, setSeccionActiva]
+consola_page->React: useState(true)
+consola_page<--React: [loading, setLoading]
+consola_page->React: useState([])
+consola_page<--React: [nuevosLogros, setNuevosLogros]
+
+note over consola_page: === OBTENCIÓN DE DATOS INICIALES ===
+consola_page->React: useNavigate()
+consola_page<--React: navigate
+consola_page->React: useLocation()
+consola_page<--React: location
+consola_page->React: location.state?.profileId
+consola_page<--React: profileId
+
+note over consola_page: === REGISTRO DEL USEEFFECT ===
+note over consola_page: Aquí es donde se registra la referencia de la función del callback en React
+consola_page->React: useEffect(() => {\n  if (perfilNino && profileId) {\n    verificarNuevosLogros();\n  }\n}, [perfilNino, profileId])
+
+APP<--consola_page: jsx (componente renderizado)
+
+note over React: === EJECUCIÓN DEL CALLBACK ===
+note over React: React detecta cambios en [perfilNino, profileId] y ejecuta el callback
+
+consola_page<-React: Ejecutar callback del useEffect
+
+alt perfilNino && profileId existen
+    note over consola_page: === VERIFICACIÓN DE LOGROS ===
+    consola_page->consola_page: verificarNuevosLogros()
+    
+    consola_page->rewards: RewardsService.verificarYOtorgarLogros(profileId, perfilNino)
+    
+    alt Operación exitosa
+        consola_page<--rewards: logros[]
+        
+        alt logros.length > 0 (Nuevos logros encontrados)
+            consola_page->React: setNuevosLogros(logros)
+            consola_page<--React: estado nuevosLogros actualizado
+            
+            note over React: Re-render del componente
+            React->APP: Re-render ConsolaNino con nuevos logros
+            APP->Héctor: Mostrar modal de nuevos logros
+            
+        else logros.length === 0 (Sin nuevos logros)
+            note over consola_page: No se actualiza el estado, no hay nuevos logros
+        end
+        
+    else Error en verificación de logros
+        consola_page<--rewards: Error
+        consola_page->React: console.error('Error verificando logros:', error)
+        note over consola_page: Error registrado en consola
+    end
+    
+else perfilNino o profileId no existen
+    note over consola_page: No se ejecuta verificarNuevosLogros()
+end
+
+note over React: === FINALIZACIÓN DEL CALLBACK ===
+note over React: IMPORTANTE: Los callbacks de useEffect NO pueden retornar nada
+note over React: (excepto una función de limpieza opcional)
+note over consola_page: El callback del useEffect termina sin retornar valores
+note over consola_page: Los logros se manejan a través del estado, no como retorno
+
+note over APP: === COMPONENTE ACTUALIZADO ===
+alt Hay nuevos logros
+    APP->Héctor: Renderizar modal de logros
+else Sin cambios
+    APP->Héctor: Interfaz normal sin cambios
+end

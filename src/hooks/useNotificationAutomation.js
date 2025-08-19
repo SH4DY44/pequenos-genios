@@ -2,7 +2,15 @@
 import { useEffect, useCallback, useState, useRef } from 'react';
 import { auth, db } from '../config/firebase';
 import { collection, query, where, getDocs } from 'firebase/firestore';
-import { NotificationScheduler } from '../services/notificationScheduler';
+
+// Importación condicional para evitar errores si el servicio no está disponible
+let NotificationScheduler;
+try {
+  NotificationScheduler = require('../services/notificationScheduler').NotificationScheduler;
+} catch (error) {
+  console.warn('⚠️ NotificationScheduler no disponible:', error);
+  NotificationScheduler = null;
+}
 
 export function useNotificationAutomation() {
   const [isMonitoring, setIsMonitoring] = useState(false);
@@ -10,8 +18,33 @@ export function useNotificationAutomation() {
   const intervalosRef = useRef({});
   const userRef = useRef(null);
 
+  // ✅ CORREGIDO: Verificar disponibilidad de servicios
+  const verificarDisponibilidadServicios = useCallback(() => {
+    const serviciosDisponibles = {
+      auth: !!auth,
+      db: !!db,
+      notificationScheduler: !!NotificationScheduler
+    };
+
+    const serviciosFaltantes = Object.entries(serviciosDisponibles)
+      .filter(([_, disponible]) => !disponible)
+      .map(([servicio]) => servicio);
+
+    if (serviciosFaltantes.length > 0) {
+      console.warn('⚠️ Servicios no disponibles:', serviciosFaltantes);
+      return false;
+    }
+
+    return true;
+  }, []);
+
   // ✅ CORREGIDO: Obtener perfiles del usuario actual usando Firebase
   const obtenerPerfilesUsuario = useCallback(async (userId) => {
+    if (!db) {
+      console.warn('⚠️ Base de datos no disponible');
+      return [];
+    }
+
     try {
       const q = query(
         collection(db, 'childProfiles'),
@@ -60,9 +93,11 @@ export function useNotificationAutomation() {
 
   // ✅ CORREGIDO: Función para verificar logros usando el NotificationScheduler existente
   const verificarLogrosUsuarioActual = useCallback(async () => {
-    try {
-      if (!auth.currentUser) return;
+    if (!NotificationScheduler || !auth?.currentUser || !verificarDisponibilidadServicios()) {
+      return;
+    }
 
+    try {
       // Obtener perfiles del usuario actual
       const perfiles = await obtenerPerfilesUsuario(auth.currentUser.uid);
       
@@ -73,13 +108,15 @@ export function useNotificationAutomation() {
     } catch (error) {
       console.error('Error verificando logros:', error);
     }
-  }, [obtenerPerfilesUsuario]);
+  }, [obtenerPerfilesUsuario, verificarDisponibilidadServicios]);
 
   // ✅ CORREGIDO: Función para verificar actividad usando el NotificationScheduler existente
   const verificarActividadUsuarioActual = useCallback(async () => {
-    try {
-      if (!auth.currentUser) return;
+    if (!NotificationScheduler || !auth?.currentUser || !verificarDisponibilidadServicios()) {
+      return;
+    }
 
+    try {
       // Obtener perfiles del usuario actual
       const perfiles = await obtenerPerfilesUsuario(auth.currentUser.uid);
       
@@ -90,7 +127,7 @@ export function useNotificationAutomation() {
     } catch (error) {
       console.error('Error verificando actividad:', error);
     }
-  }, [obtenerPerfilesUsuario]);
+  }, [obtenerPerfilesUsuario, verificarDisponibilidadServicios]);
 
   // ✅ CORREGIDO: Solo monitoreo ligero apropiado para frontend
   const iniciarMonitoreoLigero = useCallback(() => {

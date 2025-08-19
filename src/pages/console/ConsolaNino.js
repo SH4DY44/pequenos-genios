@@ -103,7 +103,6 @@ function ConsolaNino() {
         );
       }
   
-      // RESTAURADO: Agregar estrellas si las hay
       // Pero solo si NO es una actividad (que ya las procesó directamente)
       if (gameData.estrellas > 0 && !gameData.esActividad) {
         await RewardsService.agregarEstrellas(
