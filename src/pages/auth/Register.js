@@ -91,8 +91,18 @@ function Register() {
     if (googleLoading) return; // Evita dobles ejecuciones
     setGoogleLoading(true);
     try {
+      console.log('🚀 Iniciando autenticación con Google...');
+      console.log('🌐 Dominio actual:', window.location.hostname);
+      
       const provider = new GoogleAuthProvider();
-      await signInWithPopup(auth, provider);
+      // Agregar configuración adicional para producción
+      provider.setCustomParameters({
+        prompt: 'select_account'
+      });
+      
+      const result = await signInWithPopup(auth, provider);
+      console.log('✅ Autenticación exitosa:', result.user?.email);
+      
       // Verificar si el tutor ya existe en Firestore
       const tutorDoc = await getDoc(doc(db, 'tutors', auth.currentUser.uid));
       if (tutorDoc.exists()) {
@@ -101,13 +111,42 @@ function Register() {
         navigate('/tutor-profile');
       }
     } catch (err) {
-      if (err.code === 'auth/popup-closed-by-user') {
-        setError('Se cerró la ventana de inicio de sesión');
-      } else {
-        setError('Error al iniciar sesión con Google');
+      console.error('❌ Error completo en Google Login:', {
+        code: err.code,
+        message: err.message,
+        domain: window.location.hostname,
+        timestamp: new Date().toISOString()
+      });
+      
+      // Manejo de errores más específico
+      switch (err.code) {
+        case 'auth/popup-closed-by-user':
+          setError('Se cerró la ventana de inicio de sesión');
+          break;
+        case 'auth/popup-blocked':
+          setError('Tu navegador bloqueó la ventana emergente. Por favor, permite ventanas emergentes para este sitio.');
+          break;
+        case 'auth/cancelled-popup-request':
+          setError('Solicitud de inicio de sesión cancelada');
+          break;
+        case 'auth/network-request-failed':
+          setError('Error de conexión. Verifica tu internet e intenta de nuevo.');
+          break;
+        case 'auth/unauthorized-domain':
+          setError('Este dominio no está autorizado para autenticación con Google. Contacta al administrador.');
+          console.error('🔥 DOMINIO NO AUTORIZADO - Configurar en Firebase Console');
+          break;
+        case 'auth/operation-not-allowed':
+          setError('Autenticación con Google no está habilitada. Contacta al administrador.');
+          break;
+        default:
+          setError(`Error al iniciar sesión con Google: ${err.message}`);
       }
-      // Log global para debugging
-      console.error('Error en Google Login:', err);
+      
+      // En desarrollo, mostrar más detalles
+      if (process.env.NODE_ENV === 'development') {
+        console.error('🔍 Detalles del error para debugging:', err);
+      }
     } finally {
       setGoogleLoading(false);
     }
